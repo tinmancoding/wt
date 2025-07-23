@@ -1,0 +1,41 @@
+{
+  "name": "wt",
+  "version": "0.1.0",
+  "description": "Git Worktree Manager - Enhanced CLI tool for managing Git worktrees",
+  "author": "Your Name",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "main": "src/index.ts",
+  "bin": {
+    "wt": "./wt"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build --compile --minify --sourcemap --target bun src/index.ts --outfile wt",
+    "test": "bun test",
+    "test:unit": "bun test tests/unit/",
+    "test:integration": "bun test tests/integration/",
+    "type-check": "bun run tsc --noEmit",
+    "lint": "bun run eslint src/ tests/"
+  },
+  "keywords": [
+    "git",
+    "worktree",
+    "cli",
+    "developer-tools",
+    "git-tools"
+  ],
+  "devDependencies": {
+    "@types/bun": "latest",
+    "eslint": "^8.50.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

@@ -12,11 +12,11 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 **Tasks**:
 - [x] Set up project structure according to PRD specs
-- [ ] Create `devbox.json` with required packages and scripts
-- [ ] Initialize `package.json` with Bun configuration
-- [ ] Set up `tsconfig.json` for TypeScript
-- [ ] Create basic project structure (src/, tests/, docs/)
-- [ ] Add initial `.gitignore`
+- [x] Create `devbox.json` with required packages and scripts
+- [x] Initialize `package.json` with Bun configuration
+- [x] Set up `tsconfig.json` for TypeScript
+- [x] Create basic project structure (src/, tests/, docs/)
+- [x] Add initial `.gitignore`
 
 **Test Command**: `devbox shell && bun install && bun run type-check`
 

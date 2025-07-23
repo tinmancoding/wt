@@ -1,0 +1,64 @@
+# dependencies (bun install)
+node_modules
+
+# output
+out
+dist
+*.tgz
+
+# Built binary
+wt
+/wt
+
+# Build artifacts
+build/
+target/
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# VSCode
+.vscode/settings.json
+.vscode/launch.json
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# Temporary test repositories (gitignored)
+temp/
+*.tmp
+test-repos/
+
+# OS generated files
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local configuration
+.wtconfig.local
+
+# Editor backup files
+*.bak
+*.orig
