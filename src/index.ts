@@ -5,7 +5,23 @@
  * Enhanced CLI tool for managing Git worktrees
  */
 
-// Entry point for the WT application
-console.log("Hello via Bun!");
+import { CLI } from './cli/index.ts';
+import { version } from '../package.json';
+import { listCommand, createCommand } from './commands/index.ts';
 
-process.exit(0);
+const cli = new CLI({
+  name: 'wt',
+  version,
+  description: 'Git Worktree Manager - Enhanced CLI tool for managing Git worktrees'
+});
+
+// Register commands
+cli.command(listCommand);
+cli.command(createCommand);
+
+try {
+  await cli.run(process.argv.slice(2));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : 'An unknown error occurred');
+  process.exit(1);
+}
