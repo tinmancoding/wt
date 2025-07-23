@@ -76,7 +76,7 @@ wt init https://github.com/user/repo.git my-project
 my-project/
 ├── .bare/          # Bare git repository
 ├── .git            # Points to .bare directory
-├── .wtconfig       # WT configuration
+├── .wtconfig.json  # WT configuration
 ├── feature-1/      # Worktree directories
 ├── feature-2/
 └── main/
@@ -84,7 +84,7 @@ my-project/
 
 ## Configuration
 
-Create a `.wtconfig` file in your repository root:
+Create a `.wtconfig.json` file in your repository root:
 
 ```json
 {

@@ -50,16 +50,16 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 ### Phase 2.1: Configuration Schema & Loading
 **Duration**: 30 minutes  
-**Manual Test**: Create `.wtconfig` file and verify parsing
+**Manual Test**: Create `.wtconfig.json` file and verify parsing
 
 **Tasks**:
 - [ ] Define configuration TypeScript interface
-- [ ] Implement `.wtconfig` file loading and parsing
+- [ ] Implement `.wtconfig.json` file loading and parsing
 - [ ] Add default configuration values
 - [ ] Validate configuration schema
 - [ ] Handle missing/malformed config gracefully
 
-**Test Command**: Create various `.wtconfig` files and test parsing
+**Test Command**: Create various `.wtconfig.json` files and test parsing
 
 ### Phase 2.2: Configuration Commands
 **Duration**: 15 minutes  
@@ -251,7 +251,7 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 - [ ] Handle hook failures gracefully
 - [ ] Support various executable types
 
-**Test Command**: Configure hooks in `.wtconfig` and verify execution
+**Test Command**: Configure hooks in `.wtconfig.json` and verify execution
 
 ## Phase 10: Additional Commands & Polish (1.5 hours)
 

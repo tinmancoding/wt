@@ -102,7 +102,7 @@ Walk up directory tree looking for:
 
 #### Configuration System
 
-**Location**: `.wtconfig` in repository root (beside `.bare/`)
+**Location**: `.wtconfig.json` in repository root (beside `.bare/`)
 
 **Schema**:
 ```json
