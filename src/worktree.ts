@@ -1,5 +1,5 @@
-import { spawn } from 'child_process';
 import { resolve, relative, basename } from 'path';
+import { executeGitCommand } from './git.ts';
 import type { RepositoryInfo } from './repository.ts';
 
 export interface WorktreeInfo {
@@ -11,37 +11,6 @@ export interface WorktreeInfo {
   isDetached: boolean;
   isLocked: boolean;
   relativePath: string;
-}
-
-/**
- * Executes a git command and returns the output
- */
-async function executeGitCommand(gitDir: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const childProcess = spawn('git', ['--git-dir', gitDir, ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env }
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    childProcess.stdout?.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    childProcess.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    childProcess.on('close', (code: number | null) => {
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        reject(new Error(`Git command failed: ${stderr.trim()}`));
-      }
-    });
-  });
 }
 
 /**

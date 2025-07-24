@@ -4,8 +4,8 @@
 
 import { join, resolve, relative, dirname } from 'node:path';
 import { readFile, writeFile, access, constants } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { EXIT_CODES } from './cli/types.ts';
+import { executeGitCommand } from './git.ts';
 import type { RepositoryInfo } from './repository.ts';
 
 export interface WTConfig {
@@ -62,37 +62,6 @@ export const DEFAULT_CONFIG: Omit<WTConfig, 'worktreeDir'> & { worktreeDir: stri
  * Configuration file name
  */
 export const CONFIG_FILE_NAME = '.wtconfig.json';
-
-/**
- * Executes a git command and returns the output
- */
-async function executeGitCommand(gitDir: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const childProcess = spawn('git', ['--git-dir', gitDir, ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env } // Explicitly pass environment
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    childProcess.stdout?.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    childProcess.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    childProcess.on('close', (code: number | null) => {
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        reject(new Error(`Git command failed: ${stderr.trim()}`));
-      }
-    });
-  });
-}
 
 /**
  * Detects the appropriate default worktree directory based on existing worktrees
