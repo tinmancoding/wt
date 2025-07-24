@@ -85,14 +85,14 @@ export class ArgumentParser {
   /**
    * Check if help was requested
    */
-  isHelpRequested(flags: Record<string, any>): boolean {
+  isHelpRequested(flags: Record<string, unknown>): boolean {
     return !!(flags.help || flags.h);
   }
 
   /**
    * Check if version was requested
    */
-  isVersionRequested(flags: Record<string, any>): boolean {
+  isVersionRequested(flags: Record<string, unknown>): boolean {
     return !!(flags.version || flags.v);
   }
 }

@@ -332,19 +332,29 @@ export async function updateConfigValue(
     // Handle top-level properties
     switch (key) {
       case 'worktreeDir':
+        if (typeof value !== 'string') {
+          throw new ConfigError(`${key} must be a string`);
+        }
+        currentConfig.worktreeDir = value;
+        break;
       case 'defaultBranch':
         if (typeof value !== 'string') {
           throw new ConfigError(`${key} must be a string`);
         }
-        (currentConfig as any)[key] = value;
+        currentConfig.defaultBranch = value;
         break;
         
       case 'autoFetch':
+        if (typeof value !== 'boolean') {
+          throw new ConfigError(`${key} must be a boolean`);
+        }
+        currentConfig.autoFetch = value;
+        break;
       case 'confirmDelete':
         if (typeof value !== 'boolean') {
           throw new ConfigError(`${key} must be a boolean`);
         }
-        (currentConfig as any)[key] = value;
+        currentConfig.confirmDelete = value;
         break;
         
       default:
@@ -373,7 +383,18 @@ export function getConfigValue(
     return config.hooks[hookKey];
   }
   
-  return (config as any)[key];
+  switch (key) {
+    case 'worktreeDir':
+      return config.worktreeDir;
+    case 'autoFetch':
+      return config.autoFetch;
+    case 'confirmDelete':
+      return config.confirmDelete;
+    case 'defaultBranch':
+      return config.defaultBranch;
+    default:
+      return null;
+  }
 }
 
 /**

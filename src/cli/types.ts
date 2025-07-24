@@ -28,18 +28,18 @@ export interface FlagDefinition {
   shortName?: string;
   description: string;
   type: 'boolean' | 'string' | 'number';
-  default?: any;
+  default?: unknown;
 }
 
 export interface CommandContext {
   args: Record<string, string>;
-  flags: Record<string, any>;
+  flags: Record<string, unknown>;
   positional: string[];
 }
 
 export interface ParsedArgs {
   command?: string;
-  flags: Record<string, any>;
+  flags: Record<string, unknown>;
   positional: string[];
 }
 
