@@ -165,14 +165,14 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Test all three branch scenarios (local, remote, new)
 
 **Tasks**:
-- [ ] Implement branch existence checking (local)
-- [ ] Implement branch existence checking (remote)
-- [ ] Add auto-fetch functionality (respecting config)
-- [ ] Create worktree for existing local branch
-- [ ] Create worktree for remote branch (with tracking)
-- [ ] Create worktree for new branch from HEAD
-- [ ] Add proper warning messages for outdated branches
-- [ ] Implement `wt create <branch>` command
+- [x] Implement branch existence checking (local)
+- [x] Implement branch existence checking (remote)
+- [x] Add auto-fetch functionality (respecting config)
+- [x] Create worktree for existing local branch
+- [x] Create worktree for remote branch (with tracking)
+- [x] Create worktree for new branch from HEAD
+- [x] Add proper warning messages for outdated branches
+- [x] Implement `wt create <branch>` command
 
 **Test Scenarios**:
 1. `wt create existing-local-branch`

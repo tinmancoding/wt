@@ -1,7 +1,7 @@
 import type { Command } from '../cli/types.ts';
 import { detectRepository, RepositoryError } from '../repository.ts';
 import { loadConfig, updateConfigValue, getConfigValue, formatConfig, type WTConfig } from '../config.ts';
-import { listWorktrees, formatWorktree, formatWorktreeHeader } from '../worktree.ts';
+import { listWorktrees, formatWorktree, formatWorktreeHeader, createWorktreeWithBranch } from '../worktree.ts';
 import { EXIT_CODES } from '../cli/types.ts';
 
 /**
@@ -53,11 +53,28 @@ export const createCommand: Command = {
     }
   ],
   handler: async ({ positional }) => {
-    const branch = positional[0];
-    if (!branch) {
-      throw new Error('Branch name is required');
+    try {
+      const branch = positional[0];
+      if (!branch) {
+        console.error('Error: Branch name is required');
+        process.exit(EXIT_CODES.INVALID_ARGUMENTS);
+      }
+
+      const repoInfo = await detectRepository();
+      const config = await loadConfig(repoInfo);
+      
+      await createWorktreeWithBranch(repoInfo, config, branch);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error creating worktree: ${message}`);
+      
+      // Use specific exit code for repository errors
+      if (error instanceof RepositoryError) {
+        process.exit(EXIT_CODES.GIT_REPO_NOT_FOUND);
+      } else {
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
     }
-    console.log(`This will create worktree for branch: ${branch}`);
   }
 };
 

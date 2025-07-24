@@ -204,4 +204,141 @@ describe('Worktree List Command Integration', () => {
       expect(result.stdout).toContain('*'); // Current worktree indicator
     });
   });
+
+  describe('wt create command', () => {
+    test('should create worktree for new branch', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create worktree for new branch
+      const result = await runWT(['create', 'feature-branch'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Created worktree with new branch \'feature-branch\'');
+      
+      // Verify worktree was created
+      const listResult = await runWT(['list'], repoDir);
+      expect(listResult.stdout).toContain('feature-branch');
+    });
+
+    test('should create worktree for existing local branch', async () => {
+      // Initialize git repository with multiple branches
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create a local branch
+      await runGit(['checkout', '-b', 'existing-branch'], repoDir);
+      await writeFile(join(repoDir, 'feature.txt'), 'Feature file');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Add feature'], repoDir);
+      await runGit(['checkout', 'main'], repoDir);
+
+      // Create worktree for existing local branch
+      const result = await runWT(['create', 'existing-branch'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Created worktree for existing local branch \'existing-branch\'');
+      
+      // Verify worktree was created
+      const listResult = await runWT(['list'], repoDir);
+      expect(listResult.stdout).toContain('existing-branch');
+    });
+
+    test('should work with autoFetch disabled', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Configure autoFetch to false
+      await runWT(['config', 'autoFetch', 'false'], repoDir);
+
+      // Create worktree for new branch
+      const result = await runWT(['create', 'no-fetch-branch'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).not.toContain('Fetching latest changes');
+      expect(result.stdout).toContain('Created worktree with new branch \'no-fetch-branch\'');
+    });
+
+    test('should handle invalid branch names gracefully', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Try to create worktree with invalid branch name
+      const result = await runWT(['create', '..invalid..branch..'], repoDir);
+
+      expect(result.exitCode).toBe(1); // Should fail
+      expect(result.stderr).toContain('Error creating worktree');
+    });
+
+    test('should handle missing branch argument', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+
+      // Try to create worktree without branch name
+      const result = await runWT(['create'], repoDir);
+
+      expect(result.exitCode).toBe(2); // INVALID_ARGUMENTS
+      expect(result.stderr).toContain('Branch name is required');
+    });
+
+    test('should work with custom worktreeDir configuration', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create worktrees directory and configure
+      await mkdir(join(repoDir, 'worktrees'), { recursive: true });
+      await runWT(['config', 'worktreeDir', './worktrees'], repoDir);
+
+      // Create worktree for new branch
+      const result = await runWT(['create', 'custom-dir-branch'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Created worktree with new branch \'custom-dir-branch\'');
+      expect(result.stdout).toContain('worktrees/custom-dir-branch');
+    });
+
+    test('should handle git repository errors', async () => {
+      // Try to create worktree in non-git directory
+      const result = await runWT(['create', 'test-branch'], tempDir);
+
+      expect(result.exitCode).toBe(3); // GIT_REPO_NOT_FOUND
+      expect(result.stderr).toContain('No Git repository found');
+    });
+  });
 });
