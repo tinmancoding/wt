@@ -7,7 +7,7 @@
 
 import { CLI } from './cli/index.ts';
 import { version } from '../package.json';
-import { listCommand, createCommand, configCommand, removeCommand, printDirCommand } from './commands/index.ts';
+import { listCommand, createCommand, configCommand, removeCommand, printDirCommand, setupCommand } from './commands/index.ts';
 
 const cli = new CLI({
   name: 'wt',
@@ -21,6 +21,7 @@ cli.command(createCommand);
 cli.command(configCommand);
 cli.command(removeCommand);
 cli.command(printDirCommand);
+cli.command(setupCommand);
 
 try {
   await cli.run(process.argv.slice(2));

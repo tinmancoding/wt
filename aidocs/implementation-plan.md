@@ -251,12 +251,12 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Generate and test shell functions across different shells
 
 **Tasks**:
-- [ ] Implement `wt setup --bash|--zsh|--fish|--auto` command
-- [ ] Add shell detection from environment variables
-- [ ] Generate shell-specific wrapper function syntax
-- [ ] Create `wt()`, `wts()` functions with proper error handling
-- [ ] Handle switch/sw subcommands with directory changing
-- [ ] Add fallback to normal command execution for non-switch operations
+- [x] Implement `wt setup --bash|--zsh|--fish|--auto` command
+- [x] Add shell detection from environment variables
+- [x] Generate shell-specific wrapper function syntax
+- [x] Create `wt()`, `wts()` functions with proper error handling
+- [x] Handle switch/sw subcommands with directory changing
+- [x] Add fallback to normal command execution for non-switch operations
 
 **Test Command**: `source <(wt setup --bash) && wt switch feat`
 

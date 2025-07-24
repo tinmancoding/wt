@@ -13,6 +13,7 @@ import {
 } from '../worktree.ts';
 import { EXIT_CODES } from '../cli/types.ts';
 import { basename } from 'path';
+import type { SupportedShell } from '../shell.ts';
 
 /**
  * List command - lists all worktrees
@@ -388,6 +389,92 @@ export const printDirCommand: Command = {
       } else {
         process.exit(EXIT_CODES.GENERAL_ERROR);
       }
+    }
+  }
+};
+
+/**
+ * Setup command - generates shell wrapper functions
+ */
+export const setupCommand: Command = {
+  name: 'setup',
+  description: 'Generate shell wrapper functions for enhanced integration',
+  flags: [
+    {
+      name: 'bash',
+      description: 'Generate bash wrapper functions',
+      type: 'boolean'
+    },
+    {
+      name: 'zsh', 
+      description: 'Generate zsh wrapper functions',
+      type: 'boolean'
+    },
+    {
+      name: 'fish',
+      description: 'Generate fish wrapper functions',
+      type: 'boolean'
+    },
+    {
+      name: 'auto',
+      description: 'Auto-detect shell and generate appropriate wrapper functions',
+      type: 'boolean'
+    }
+  ],
+  handler: async ({ flags }) => {
+    // Import shell utilities
+    const { detectShell, generateShellWrapper, getShellSetupInstructions } = await import('../shell.ts');
+    
+    let targetShell: SupportedShell | null = null;
+    
+    // Check for specific shell flags
+    if (flags.bash) {
+      targetShell = 'bash';
+    } else if (flags.zsh) {
+      targetShell = 'zsh';
+    } else if (flags.fish) {
+      targetShell = 'fish';
+    } else if (flags.auto) {
+      targetShell = detectShell();
+      if (!targetShell) {
+        console.error('Error: Could not auto-detect shell from $SHELL environment variable');
+        console.error('Please specify a shell explicitly: --bash, --zsh, or --fish');
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+    } else {
+      // No flags provided, show help
+      console.error('Error: Please specify a shell option');
+      console.error('Usage: wt setup --bash|--zsh|--fish|--auto');
+      console.error('');
+      console.error('Examples:');
+      console.error('  wt setup --auto          # Auto-detect shell');
+      console.error('  wt setup --bash          # Generate bash functions');
+      console.error('  wt setup --zsh           # Generate zsh functions');
+      console.error('  wt setup --fish          # Generate fish functions');
+      console.error('');
+      console.error('To install the wrapper functions:');
+      
+      const detectedShell = detectShell();
+      if (detectedShell) {
+        console.error(getShellSetupInstructions(detectedShell));
+      } else {
+        console.error('# For bash: source <(wt setup --bash)');
+        console.error('# For zsh:  source <(wt setup --zsh)');
+        console.error('# For fish: wt setup --fish | source');
+      }
+      
+      process.exit(EXIT_CODES.INVALID_ARGUMENTS);
+    }
+    
+    try {
+      // Generate wrapper functions for the target shell
+      const wrapperScript = generateShellWrapper(targetShell);
+      console.log(wrapperScript);
+      
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error generating shell wrapper: ${message}`);
+      process.exit(EXIT_CODES.GENERAL_ERROR);
     }
   }
 };
