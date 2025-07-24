@@ -1,6 +1,7 @@
 import type { Command } from '../cli/types.ts';
-import { detectRepository } from '../repository.ts';
+import { detectRepository, RepositoryError } from '../repository.ts';
 import { loadConfig, updateConfigValue, getConfigValue, formatConfig, type WTConfig } from '../config.ts';
+import { listWorktrees, formatWorktree, formatWorktreeHeader } from '../worktree.ts';
 import { EXIT_CODES } from '../cli/types.ts';
 
 /**
@@ -11,7 +12,30 @@ export const listCommand: Command = {
   description: 'List all worktrees',
   aliases: ['ls'],
   handler: async () => {
-    console.log('This will list worktrees');
+    try {
+      const repoInfo = await detectRepository();
+      const worktrees = await listWorktrees(repoInfo);
+      
+      if (worktrees.length === 0) {
+        console.log('No worktrees found.');
+        return;
+      }
+      
+      console.log(formatWorktreeHeader());
+      for (const worktree of worktrees) {
+        console.log(formatWorktree(worktree));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error listing worktrees: ${message}`);
+      
+      // Use specific exit code for repository errors
+      if (error instanceof RepositoryError) {
+        process.exit(EXIT_CODES.GIT_REPO_NOT_FOUND);
+      } else {
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+    }
   }
 };
 

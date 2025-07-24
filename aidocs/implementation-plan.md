@@ -87,11 +87,11 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Create manual worktrees and verify listing
 
 **Tasks**:
-- [ ] Implement git worktree list parsing
-- [ ] Format worktree display with status
-- [ ] Show current worktree indicator
-- [ ] Handle empty worktree list gracefully
-- [ ] Add `wt list` command
+- [x] Implement git worktree list parsing
+- [x] Format worktree display with status
+- [x] Show current worktree indicator
+- [x] Handle empty worktree list gracefully
+- [x] Add `wt list` command
 
 **Test Command**: `git worktree add ../test-worktree && wt list`
 
