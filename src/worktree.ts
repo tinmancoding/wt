@@ -376,3 +376,73 @@ export async function createWorktreeWithBranch(
   // Create the worktree
   await createWorktree(repoInfo, resolution, worktreePath);
 }
+
+/**
+ * Finds worktrees matching a pattern
+ */
+export function findWorktreesByPattern(worktrees: WorktreeInfo[], pattern?: string): WorktreeInfo[] {
+  if (!pattern) {
+    return worktrees;
+  }
+
+  const normalizedPattern = pattern.toLowerCase();
+  
+  return worktrees.filter(worktree => {
+    const name = basename(worktree.path).toLowerCase();
+    const branch = worktree.branch.toLowerCase();
+    const path = worktree.relativePath.toLowerCase();
+    
+    return name.includes(normalizedPattern) || 
+           branch.includes(normalizedPattern) || 
+           path.includes(normalizedPattern);
+  });
+}
+
+/**
+ * Removes a worktree
+ */
+export async function removeWorktree(repoInfo: RepositoryInfo, worktreePath: string): Promise<void> {
+  try {
+    await executeGitCommand(repoInfo.gitDir, ['worktree', 'remove', worktreePath]);
+  } catch (error) {
+    throw new Error(`Failed to remove worktree: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Deletes a local branch
+ */
+export async function deleteBranch(repoInfo: RepositoryInfo, branchName: string): Promise<void> {
+  try {
+    await executeGitCommand(repoInfo.gitDir, ['branch', '-D', branchName]);
+  } catch (error) {
+    throw new Error(`Failed to delete branch: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Prompts user for confirmation
+ */
+export function promptConfirmation(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    process.stdout.write(`${message} (y/N): `);
+    
+    const stdin = process.stdin;
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    
+    const onData = (key: string) => {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeListener('data', onData);
+      
+      process.stdout.write('\n');
+      
+      const answer = key.toLowerCase();
+      resolve(answer === 'y' || answer === 'yes');
+    };
+    
+    stdin.on('data', onData);
+  });
+}

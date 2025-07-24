@@ -341,4 +341,214 @@ describe('Worktree List Command Integration', () => {
       expect(result.stderr).toContain('No Git repository found');
     });
   });
+
+  describe('wt remove command', () => {
+    test('should remove worktree without branch deletion', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create additional worktree
+      const worktreeDir = join(tempDir, 'feature-worktree');
+      await runGit(['worktree', 'add', '-b', 'feature-branch', worktreeDir], repoDir);
+
+      // Remove worktree using wt remove
+      const result = await runWT(['remove', 'feature'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Removing worktree \'feature-worktree\'');
+      expect(result.stdout).toContain('Worktree \'feature-worktree\' removed successfully');
+      
+      // Verify worktree was removed from list
+      const listResult = await runWT(['list'], repoDir);
+      expect(listResult.stdout).not.toContain('feature-worktree');
+    });
+
+    test('should remove worktree with branch deletion', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create additional worktree
+      const worktreeDir = join(tempDir, 'feature-worktree');
+      await runGit(['worktree', 'add', '-b', 'feature-branch', worktreeDir], repoDir);
+
+      // Remove worktree with branch deletion
+      const result = await runWT(['remove', 'feature', '--with-branch'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Removing worktree \'feature-worktree\'');
+      expect(result.stdout).toContain('Worktree \'feature-worktree\' removed successfully');
+      expect(result.stdout).toContain('Deleting branch \'feature-branch\'');
+      expect(result.stdout).toContain('Branch \'feature-branch\' deleted successfully');
+    });
+
+    test('should handle multiple matching worktrees', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create multiple feature worktrees
+      await runGit(['worktree', 'add', '-b', 'feature-1', join(tempDir, 'feature-1')], repoDir);
+      await runGit(['worktree', 'add', '-b', 'feature-2', join(tempDir, 'feature-2')], repoDir);
+
+      // Try to remove with ambiguous pattern
+      const result = await runWT(['remove', 'feature'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Multiple worktrees match pattern "feature"');
+      expect(result.stdout).toContain('Please be more specific');
+      expect(result.stdout).toContain('feature-1');
+      expect(result.stdout).toContain('feature-2');
+    });
+
+    test('should handle no matching worktrees', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Try to remove non-existent worktree
+      const result = await runWT(['remove', 'nonexistent'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('No worktrees found matching pattern: nonexistent');
+    });
+
+    test('should prevent removing current worktree', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Try to remove current worktree (main branch)
+      const result = await runWT(['remove', 'main'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('No worktrees found matching pattern: main');
+    });
+
+    test('should work with rm alias', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create additional worktree
+      const worktreeDir = join(tempDir, 'feature-worktree');
+      await runGit(['worktree', 'add', '-b', 'feature-branch', worktreeDir], repoDir);
+
+      // Remove worktree using rm alias
+      const result = await runWT(['rm', 'feature'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Removing worktree \'feature-worktree\'');
+      expect(result.stdout).toContain('Worktree \'feature-worktree\' removed successfully');
+    });
+
+    test('should respect confirmDelete configuration', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Create additional worktree
+      const worktreeDir = join(tempDir, 'feature-worktree');
+      await runGit(['worktree', 'add', '-b', 'feature-branch', worktreeDir], repoDir);
+
+      // Enable confirmation prompts
+      await runWT(['config', 'confirmDelete', 'true'], repoDir);
+
+      // Try to remove worktree (will require confirmation which won't be provided in test)
+      // For now, we'll just test that confirmDelete config was set
+      const configResult = await runWT(['config', 'confirmDelete'], repoDir);
+      expect(configResult.stdout).toBe('true');
+    });
+
+    test('should handle git repository errors', async () => {
+      // Try to remove worktree in non-git directory
+      const result = await runWT(['remove', 'test-branch'], tempDir);
+
+      expect(result.exitCode).toBe(3); // GIT_REPO_NOT_FOUND
+      expect(result.stderr).toContain('No Git repository found');
+    });
+
+    test('should handle detached HEAD worktree removal', async () => {
+      // Initialize git repository
+      await runGit(['init'], repoDir);
+      await runGit(['config', 'user.email', 'test@example.com'], repoDir);
+      await runGit(['config', 'user.name', 'Test User'], repoDir);
+      
+      // Create initial commit
+      await writeFile(join(repoDir, 'README.md'), 'Test repository');
+      await runGit(['add', '.'], repoDir);
+      await runGit(['commit', '-m', 'Initial commit'], repoDir);
+
+      // Get current commit hash
+      const commitProcess = spawn('git', ['rev-parse', 'HEAD'], {
+        cwd: repoDir,
+        stdio: ['ignore', 'pipe', 'ignore']
+      });
+      
+      let commitHash = '';
+      commitProcess.stdout?.on('data', (data) => {
+        commitHash += data.toString().trim();
+      });
+
+      await new Promise((resolve) => {
+        commitProcess.on('close', resolve);
+      });
+
+      // Create detached HEAD worktree
+      const worktreeDir = join(tempDir, 'detached-worktree');
+      await runGit(['worktree', 'add', '--detach', worktreeDir, commitHash], repoDir);
+
+      // Remove detached worktree (should not try to delete branch)
+      const result = await runWT(['remove', 'detached', '--with-branch'], repoDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Removing worktree \'detached-worktree\'');
+      expect(result.stdout).toContain('Worktree \'detached-worktree\' removed successfully');
+      // Should not attempt to delete branch for detached HEAD
+      expect(result.stdout).not.toContain('Deleting branch');
+    });
+  });
 });

@@ -1,8 +1,18 @@
 import type { Command } from '../cli/types.ts';
 import { detectRepository, RepositoryError } from '../repository.ts';
 import { loadConfig, updateConfigValue, getConfigValue, formatConfig, type WTConfig } from '../config.ts';
-import { listWorktrees, formatWorktree, formatWorktreeHeader, createWorktreeWithBranch } from '../worktree.ts';
+import { 
+  listWorktrees, 
+  formatWorktree, 
+  formatWorktreeHeader, 
+  createWorktreeWithBranch, 
+  findWorktreesByPattern,
+  removeWorktree,
+  deleteBranch,
+  promptConfirmation
+} from '../worktree.ts';
 import { EXIT_CODES } from '../cli/types.ts';
+import { basename } from 'path';
 
 /**
  * List command - lists all worktrees
@@ -182,3 +192,132 @@ function isValidConfigKey(key: string): key is keyof WTConfig | `hooks.${keyof W
   ];
   return validKeys.includes(key);
 }
+
+/**
+ * Remove command - removes worktrees with optional branch deletion
+ */
+export const removeCommand: Command = {
+  name: 'remove',
+  description: 'Remove a worktree with optional branch deletion',
+  aliases: ['rm'],
+  args: [
+    {
+      name: 'pattern',
+      description: 'Pattern to match worktree names, branches, or paths',
+      required: false
+    }
+  ],
+  flags: [
+    {
+      name: 'with-branch',
+      description: 'Also delete the associated local branch',
+      type: 'boolean'
+    }
+  ],
+  handler: async ({ positional, flags }) => {
+    try {
+      const pattern = positional[0];
+      const withBranch = !!flags['with-branch'];
+      
+      const repoInfo = await detectRepository();
+      const config = await loadConfig(repoInfo);
+      const worktrees = await listWorktrees(repoInfo);
+      
+      if (worktrees.length === 0) {
+        console.log('No worktrees found.');
+        return;
+      }
+      
+      // Filter out the current worktree - can't remove current worktree
+      const removableWorktrees = worktrees.filter(wt => !wt.isCurrent);
+      
+      // Find matching worktrees from removable ones
+      const matchingWorktrees = findWorktreesByPattern(removableWorktrees, pattern);
+      
+      if (matchingWorktrees.length === 0) {
+        if (pattern) {
+          // If a pattern was provided, always report pattern-specific message
+          console.log(`No worktrees found matching pattern: ${pattern}`);
+        } else if (removableWorktrees.length === 0) {
+          // If no pattern and no removable worktrees
+          console.log('No removable worktrees found (current worktree cannot be removed).');
+        } else {
+          // If no pattern but there are removable worktrees (shouldn't happen in this case)
+          console.log('No removable worktrees found.');
+        }
+        return;
+      }
+      
+      // If multiple matches, show them and ask user to be more specific
+      if (matchingWorktrees.length > 1 && pattern) {
+        console.log(`Multiple worktrees match pattern "${pattern}":`);
+        console.log(formatWorktreeHeader());
+        for (const worktree of matchingWorktrees) {
+          console.log(formatWorktree(worktree));
+        }
+        console.log('\nPlease be more specific with your pattern.');
+        return;
+      }
+      
+      // If no pattern given and multiple worktrees, show options
+      if (!pattern && matchingWorktrees.length > 1) {
+        console.log('Multiple worktrees available for removal:');
+        console.log(formatWorktreeHeader());
+        for (const worktree of matchingWorktrees) {
+          console.log(formatWorktree(worktree));
+        }
+        console.log('\nPlease specify a pattern to select which worktree to remove.');
+        return;
+      }
+      
+      // At this point we should have exactly one worktree
+      const worktreeToRemove = matchingWorktrees[0];
+      if (!worktreeToRemove) {
+        console.log('No worktree selected for removal.');
+        return;
+      }
+      
+      const worktreeName = basename(worktreeToRemove.path);
+      
+      // Show confirmation if required by config
+      if (config.confirmDelete) {
+        const confirmMessage = withBranch 
+          ? `Remove worktree '${worktreeName}' and delete branch '${worktreeToRemove.branch}'?`
+          : `Remove worktree '${worktreeName}'?`;
+          
+        const confirmed = await promptConfirmation(confirmMessage);
+        if (!confirmed) {
+          console.log('Removal cancelled.');
+          return;
+        }
+      }
+      
+      // Remove the worktree
+      console.log(`Removing worktree '${worktreeName}'...`);
+      await removeWorktree(repoInfo, worktreeToRemove.path);
+      console.log(`Worktree '${worktreeName}' removed successfully.`);
+      
+      // Delete branch if requested
+      if (withBranch && !worktreeToRemove.isDetached) {
+        try {
+          console.log(`Deleting branch '${worktreeToRemove.branch}'...`);
+          await deleteBranch(repoInfo, worktreeToRemove.branch);
+          console.log(`Branch '${worktreeToRemove.branch}' deleted successfully.`);
+        } catch (error) {
+          console.warn(`Warning: Failed to delete branch '${worktreeToRemove.branch}': ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error removing worktree: ${message}`);
+      
+      // Use specific exit code for repository errors
+      if (error instanceof RepositoryError) {
+        process.exit(EXIT_CODES.GIT_REPO_NOT_FOUND);
+      } else {
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+    }
+  }
+};

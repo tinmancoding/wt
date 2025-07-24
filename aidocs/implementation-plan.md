@@ -198,11 +198,11 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Remove worktrees with and without branch deletion
 
 **Tasks**:
-- [ ] Implement worktree removal with git worktree remove
-- [ ] Add optional branch deletion with `--with-branch` flag
-- [ ] Support pattern matching for worktree selection
-- [ ] Add confirmation prompts (respecting config)
-- [ ] Implement `wt remove [pattern] [--with-branch]` command
+- [x] Implement worktree removal with git worktree remove
+- [x] Add optional branch deletion with `--with-branch` flag
+- [x] Support pattern matching for worktree selection
+- [x] Add confirmation prompts (respecting config)
+- [x] Implement `wt remove [pattern] [--with-branch]` command
 
 **Test Command**: `wt remove test-worktree --with-branch`
 

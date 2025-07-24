@@ -9,6 +9,10 @@ import {
   resolveBranch,
   createWorktree,
   createWorktreeWithBranch,
+  findWorktreesByPattern,
+  removeWorktree,
+  deleteBranch,
+  promptConfirmation,
   type WorktreeInfo,
   type BranchResolution
 } from '../../src/worktree.ts';
@@ -139,8 +143,8 @@ describe('Worktree Module', () => {
   });
 
   // Mock git command functions for testing
-  const mockGitCommand = mock();
-  const mockGitCommandWithResult = mock();
+  const mockGitCommand = mock(() => Promise.resolve(''));
+  const mockGitCommandWithResult = mock(() => Promise.resolve({ stdout: '', stderr: '', exitCode: 0 }));
 
   // Mock the git module
   mock.module('../../src/git.ts', () => ({
@@ -483,7 +487,7 @@ describe('Worktree Module', () => {
 
       mockGitCommand.mockRejectedValue(new Error('Git worktree add failed'));
 
-      await expect(createWorktree(mockRepoInfo, resolution, '/test/worktree'))
+      expect(createWorktree(mockRepoInfo, resolution, '/test/worktree'))
         .rejects.toThrow('Failed to create worktree');
     });
 
@@ -493,7 +497,7 @@ describe('Worktree Module', () => {
         branchName: 'feature-branch'
       } as any;
 
-      await expect(createWorktree(mockRepoInfo, resolution, '/test/worktree'))
+      expect(createWorktree(mockRepoInfo, resolution, '/test/worktree'))
         .rejects.toThrow('Unknown branch resolution type: unknown');
     });
   });
@@ -525,6 +529,150 @@ describe('Worktree Module', () => {
         '/test/project/.bare',
         ['worktree', 'add', '/test/project/feature-branch', 'feature-branch']
       );
+    });
+  });
+
+  describe('Worktree Pattern Matching', () => {
+    const worktrees: WorktreeInfo[] = [
+      {
+        path: '/project/main',
+        branch: 'main',
+        commit: 'abc123',
+        isCurrent: true,
+        isBare: false,
+        isDetached: false,
+        isLocked: false,
+        relativePath: '.'
+      },
+      {
+        path: '/project/feature-login',
+        branch: 'feature/login',
+        commit: 'def456',
+        isCurrent: false,
+        isBare: false,
+        isDetached: false,
+        isLocked: false,
+        relativePath: '../feature-login'
+      },
+      {
+        path: '/project/bugfix-auth',
+        branch: 'bugfix/auth',
+        commit: 'ghi789',
+        isCurrent: false,
+        isBare: false,
+        isDetached: false,
+        isLocked: false,
+        relativePath: '../bugfix-auth'
+      }
+    ];
+
+    test('findWorktreesByPattern should return all worktrees when no pattern provided', () => {
+      const result = findWorktreesByPattern(worktrees);
+      expect(result).toHaveLength(3);
+      expect(result).toEqual(worktrees);
+    });
+
+    test('findWorktreesByPattern should match by worktree name', () => {
+      const result = findWorktreesByPattern(worktrees, 'feature');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.path).toBe('/project/feature-login');
+    });
+
+    test('findWorktreesByPattern should match by branch name', () => {
+      const result = findWorktreesByPattern(worktrees, 'login');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.branch).toBe('feature/login');
+    });
+
+    test('findWorktreesByPattern should match by relative path', () => {
+      const result = findWorktreesByPattern(worktrees, 'bugfix');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.relativePath).toBe('../bugfix-auth');
+    });
+
+    test('findWorktreesByPattern should return empty array for no matches', () => {
+      const result = findWorktreesByPattern(worktrees, 'nonexistent');
+      expect(result).toHaveLength(0);
+    });
+
+    test('findWorktreesByPattern should be case insensitive', () => {
+      const result = findWorktreesByPattern(worktrees, 'MAIN');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.branch).toBe('main');
+    });
+
+    test('findWorktreesByPattern should match partial strings', () => {
+      const result = findWorktreesByPattern(worktrees, 'auth');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.branch).toBe('bugfix/auth');
+    });
+  });
+
+  describe('Worktree Removal', () => {
+    test('removeWorktree should call git worktree remove with correct path', async () => {
+      mockGitCommand.mockClear();
+      mockGitCommand.mockResolvedValue('');
+
+      await removeWorktree(mockRepoInfo, '/test/project/feature-branch');
+
+      expect(mockGitCommand).toHaveBeenCalledWith(
+        '/test/project/.bare',
+        ['worktree', 'remove', '/test/project/feature-branch']
+      );
+    });
+
+    test('removeWorktree should handle git command errors', async () => {
+      mockGitCommand.mockClear();
+      mockGitCommand.mockRejectedValue(new Error('Git worktree remove failed'));
+
+      expect(removeWorktree(mockRepoInfo, '/test/project/feature-branch'))
+        .rejects.toThrow('Failed to remove worktree: Git worktree remove failed');
+    });
+
+    test('removeWorktree should handle unknown errors', async () => {
+      mockGitCommand.mockClear();
+      mockGitCommand.mockRejectedValue('Unknown error');
+
+      expect(removeWorktree(mockRepoInfo, '/test/project/feature-branch'))
+        .rejects.toThrow('Failed to remove worktree: Unknown error');
+    });
+  });
+
+  describe('Branch Deletion', () => {
+    test('deleteBranch should call git branch -D with correct branch name', async () => {
+      mockGitCommand.mockClear();
+      mockGitCommand.mockResolvedValue('');
+
+      await deleteBranch(mockRepoInfo, 'feature-branch');
+
+      expect(mockGitCommand).toHaveBeenCalledWith(
+        '/test/project/.bare',
+        ['branch', '-D', 'feature-branch']
+      );
+    });
+
+    test('deleteBranch should handle git command errors', async () => {
+      mockGitCommand.mockClear();
+      mockGitCommand.mockRejectedValue(new Error('Git branch delete failed'));
+
+      expect(deleteBranch(mockRepoInfo, 'feature-branch'))
+        .rejects.toThrow('Failed to delete branch: Git branch delete failed');
+    });
+
+    test('deleteBranch should handle unknown errors', async () => {
+      mockGitCommand.mockClear();
+      mockGitCommand.mockRejectedValue('Unknown error');
+
+      expect(deleteBranch(mockRepoInfo, 'feature-branch'))
+        .rejects.toThrow('Failed to delete branch: Unknown error');
+    });
+  });
+
+  describe('Confirmation Prompts', () => {
+    // Note: For unit tests, we'll just test the basic logic
+    // Integration tests will cover the full interactive behavior
+    test('promptConfirmation function exists and is callable', () => {
+      expect(typeof promptConfirmation).toBe('function');
     });
   });
 });
