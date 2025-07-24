@@ -218,33 +218,60 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
   - Pattern matching with multiple worktrees
   - Branch deletion verification
 
-## Phase 4: Fuzzy Finding & Switching (1 hour)
+## Phase 4: Path Resolution & Shell Integration (1 hour)
 
-### Phase 4.1: Basic Switching
+### Phase 4.1: Print-Dir Command Implementation  
 **Duration**: 30 minutes  
-**Manual Test**: Switch between existing worktrees
+**Manual Test**: Test path resolution with existing worktrees
 
 **Tasks**:
-- [x] Implement directory changing to worktree
-- [x] Add pattern matching for worktree names
-- [x] Handle single match auto-selection
-- [x] Handle multiple matches with user selection
-- [x] Implement `wt [pattern]` and `wt switch [pattern]` commands
+- [ ] Remove legacy `wt switch` command and related tests
+- [ ] Implement `wt print-dir [pattern]` command
+- [ ] Add pattern matching for worktree names
+- [ ] Handle single match auto-selection
+- [ ] Handle multiple matches with user selection
+- [ ] Clean stdout output for shell function consumption
+- [ ] Proper error handling for non-existent worktrees
 
-**Test Command**: `wt feat` (if multiple feature branches exist)
+**Test Command**: `wt print-dir feat` (should output directory path)
 
-### Phase 4.2: Interactive Fuzzy Finding
+**Testing Requirements**:
+- **Unit Tests**:
+  - Pattern matching logic with various worktree name formats
+  - Path resolution and normalization
+  - Error handling for missing worktrees
+  - Stdout formatting validation
+  - Edge cases with special characters in worktree names
+- **Integration Tests**:
+  - Path resolution with real worktrees in different repository structures
+  - Pattern matching with multiple similar worktree names
+
+### Phase 4.2: Shell Wrapper Function Generation
 **Duration**: 30 minutes  
-**Manual Test**: Run without arguments and verify fuzzy finder
+**Manual Test**: Generate and test shell functions across different shells
 
 **Tasks**:
-- [ ] Detect fzf availability
-- [ ] Implement built-in fuzzy matching fallback
-- [ ] Create interactive worktree selection
-- [ ] Handle empty selection gracefully
-- [ ] Integrate with `wt` (no arguments) command
+- [ ] Implement `wt setup --bash|--zsh|--fish|--auto` command
+- [ ] Add shell detection from environment variables
+- [ ] Generate shell-specific wrapper function syntax
+- [ ] Create `wt()`, `wts()` functions with proper error handling
+- [ ] Handle switch/sw subcommands with directory changing
+- [ ] Add fallback to normal command execution for non-switch operations
 
-**Test Command**: `wt` (should show interactive selection)
+**Test Command**: `source <(wt setup --bash) && wt switch feat`
+
+**Testing Requirements**:
+- **Unit Tests**:
+  - Shell detection logic with various $SHELL values
+  - Function generation with proper shell syntax
+  - Command routing logic (switch vs other commands)
+  - Error handling and fallback behavior
+- **Integration Tests**:
+  - Shell function generation and sourcing
+  - Directory switching functionality across different shells
+  - Error handling when print-dir fails
+  - Integration with existing shell environments
+
 
 ## Phase 5: Testing Framework (1.5 hours)
 
@@ -529,6 +556,6 @@ Each phase is considered complete when:
 - No obvious bugs or edge case failures
 - **Quality gates prevent advancing to next phase until all tests pass**
 
-## Estimated Total Time: 12-15 hours
+## Estimated Total Time: 11.5-14 hours
 
 This plan breaks down the full WT implementation into manageable, testable phases that can be reviewed quickly and provide immediate value at each step.

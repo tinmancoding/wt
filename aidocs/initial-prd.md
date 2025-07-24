@@ -35,19 +35,35 @@
 - Clear warnings for existing local branches
 - Support for branch names with special characters
 
-#### 2. Fuzzy Switching (`wt [pattern]`)
+#### 2. Worktree Path Resolution (`wt print-dir [pattern]`)
 
 **Behavior:**
-- No arguments: Show interactive fuzzy finder for all worktrees
-- With pattern: Filter worktrees matching pattern, switch if single match
-- Integration with `fzf` or built-in fuzzy matching
+- Find worktree matching pattern using fuzzy search
+- Print absolute directory path to stdout
+- Used internally by shell wrapper functions for directory switching
+- Can be used directly in scripts for path resolution
 
 **Technical Requirements:**
 - Fast worktree discovery and listing
-- Cross-platform terminal integration
-- Graceful fallback if fuzzy finder unavailable
+- Pattern matching for worktree selection
+- Clean stdout output for shell function consumption
+- Proper error handling for non-existent worktrees
 
-#### 3. PR Integration (`wt pr <pr-number>`)
+#### 3. Shell Integration & Switching (`wt setup --shell`)
+
+**Behavior:**
+- Generate shell wrapper functions for bash/zsh/fish
+- Enable directory switching via `wt switch` and `wt sw` aliases
+- Provide ultra-short `wts` convenience function
+- Handle shell-specific syntax differences
+
+**Technical Requirements:**
+- Shell detection and appropriate function generation
+- Clean integration with existing shell configurations
+- Fallback to direct command execution for non-switch operations
+- Error handling that preserves original command behavior
+
+#### 4. PR Integration (`wt pr <pr-number>`)
 
 **Behavior:**
 - Use GitHub CLI to fetch PR details
@@ -59,7 +75,7 @@
 - Proper error handling for invalid PR numbers
 - Support for cross-repository PRs (fail gracefully)
 
-#### 4. Command Execution (`wt run <branch> <command...>`)
+#### 5. Command Execution (`wt run <branch> <command...>`)
 
 **Behavior:**
 - Create worktree for `<branch>` if it doesn't exist
@@ -71,7 +87,7 @@
 - Environment variable inheritance
 - Working directory management
 
-#### 5. Repository Setup (`wt init <git-url> [name]`)
+#### 6. Repository Setup (`wt init <git-url> [name]`)
 
 **Behavior:**
 - Clone repository as bare into `.bare/` directory
@@ -92,7 +108,6 @@
 - **Dependencies**: 
   - Git (system requirement)
   - GitHub CLI (optional, for PR features)
-  - fzf (optional, for enhanced fuzzy finding)
 
 #### Repository Detection
 Walk up directory tree looking for:
@@ -162,24 +177,47 @@ The `worktreeDir` configuration uses intelligent auto-detection to determine the
 
 ```bash
 # Primary commands
-wt [pattern]                     # Fuzzy switch to worktree
-wt create <branch>              # Create worktree with smart branch resolution
-wt pr <pr-number>               # Create worktree from GitHub PR  
-wt run <branch> <command...>    # Create worktree + run command
+wt create <branch>                   # Create worktree with smart branch resolution
+wt print-dir [pattern]               # Print directory path of matching worktree
 wt remove [pattern] [--with-branch]  # Remove worktree, optionally local branch
-wt list                         # List worktrees with status
-wt switch [pattern]             # Explicit alias for default behavior
+wt list                              # List worktrees with status
+
+# Shell integration (after setup)
+wt switch [pattern]                  # Switch to worktree (shell function only)
+wt sw [pattern]                      # Short alias for switch (shell function only)
+wts [pattern]                        # Ultra-short convenience alias
+
+# GitHub & workflow commands
+wt pr <pr-number>                    # Create worktree from GitHub PR  
+wt run <branch> <command...>         # Create worktree + run command
 
 # Repository management  
-wt init <git-url> [name]        # Initialize bare repo for worktrees
-wt status                       # Show repository and worktree status
-wt clean                        # Remove stale/orphaned worktrees
+wt init <git-url> [name]             # Initialize bare repo for worktrees
+wt setup --bash|--zsh|--fish|--auto  # Generate shell wrapper functions
+wt status                            # Show repository and worktree status
+wt clean                             # Remove stale/orphaned worktrees
 
 # Configuration
-wt config                       # Show current configuration  
-wt config <key>                 # Show specific config value
-wt config <key> <value>         # Set config value
+wt config                            # Show current configuration  
+wt config <key>                      # Show specific config value
+wt config <key> <value>              # Set config value
 ```
+
+### Shell Integration Setup
+
+To enable directory switching functionality, add this line to your shell configuration:
+
+```bash
+# Add to ~/.bashrc, ~/.zshrc, or ~/.config/fish/config.fish
+source <(wt setup --bash)   # or --zsh, --fish, --auto
+```
+
+This enables the shell wrapper functions that provide seamless directory switching:
+- `wt switch [pattern]` - Switch to matching worktree
+- `wt sw [pattern]` - Short alias for switch  
+- `wts [pattern]` - Ultra-short convenience alias
+
+**Note**: The `switch` and `sw` commands only exist in the shell wrapper functions and use `wt print-dir` internally to resolve paths.
 
 ### Error Handling
 
@@ -208,8 +246,7 @@ The project uses [Devbox](https://www.jetpack.io/devbox) for reproducible develo
   "packages": [
     "bun@latest",
     "git@latest", 
-    "gh@latest",
-    "fzf@latest"
+    "gh@latest"
   ],
   "shell": {
     "init_hook": [
@@ -282,6 +319,7 @@ wt/
 - `wt archive <pattern>` - Archive completed worktrees
 - Enhanced status display with branch ahead/behind info
 - Template system for new repository initialization
+- Interactive fuzzy selection for `wt print-dir` (fzf integration)
 
 #### Advanced Features  
 - Integration with other Git hosting platforms (GitLab, Bitbucket)
@@ -352,6 +390,7 @@ wt/
 - Repository detection across directory structures
 - Configuration loading and auto-detection
 - Multi-worktree repository management
+- Shell integration setup and function generation
 
 # GitHub integration (common developer workflow)  
 - wt pr → work → merge workflow
@@ -361,6 +400,7 @@ wt/
 - Hook execution during worktree lifecycle
 - Repository initialization and setup
 - Command execution in worktree context
+- Shell wrapper function testing across different shells
 ```
 
 **Temporary Repository Creation**:
@@ -437,9 +477,10 @@ const tempRepo = await createTempRepo({
 ### Development Phases
 
 #### Phase 1: Core MVP
-- `wt create`, `wt switch`, `wt list`, `wt remove`
+- `wt create`, `wt print-dir`, `wt list`, `wt remove`
 - Basic repository detection
 - Configuration system
+- Shell integration setup (`wt setup --shell`)
 - Unit and integration tests
 
 #### Phase 2: GitHub Integration  

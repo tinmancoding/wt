@@ -5,7 +5,7 @@ A fast, intuitive command-line tool for managing Git worktrees with smart branch
 ## Features
 
 - **Smart worktree creation** - Automatically handles local, remote, and new branches
-- **Fuzzy switching** - Quickly switch between worktrees with pattern matching
+- **Directory switching** - Switch between worktrees with shell integration
 - **GitHub PR integration** - Create worktrees directly from pull requests
 - **Command execution** - Run commands in specific worktree contexts
 - **Repository initialization** - Set up bare repositories optimized for worktrees
@@ -44,12 +44,21 @@ A fast, intuitive command-line tool for managing Git worktrees with smart branch
 ### Basic Usage
 
 ```bash
+# Shell integration setup (one-time)
+source <(wt setup --bash)       # Add to ~/.bashrc
+# source <(wt setup --zsh)      # Add to ~/.zshrc  
+# source <(wt setup --fish)     # Add to ~/.config/fish/config.fish
+
 # Create worktree with smart branch resolution
 wt create feature-branch
 
-# Switch to worktree (fuzzy matching)
-wt feat                    # Matches feature-branch
-wt                         # Interactive selection
+# Switch to worktree (requires shell integration)
+wt switch feat                 # Fuzzy matches feature-branch
+wt sw feat                     # Short alias
+wts feat                       # Ultra-short alias
+
+# Get worktree directory path (for scripts)
+wt print-dir feature-branch
 
 # Create worktree from GitHub PR
 wt pr 123
@@ -132,17 +141,22 @@ This ensures new worktrees are created in the same location as existing ones, pr
 ## Commands
 
 ### Core Commands
-- `wt [pattern]` - Switch to worktree (fuzzy matching)
 - `wt create <branch>` - Create worktree with smart branch resolution
+- `wt print-dir [pattern]` - Print directory path of matching worktree
 - `wt list` - List all worktrees with status
 - `wt remove [pattern] [--with-branch]` - Remove worktree
-- `wt switch [pattern]` - Explicit switch command
+
+### Shell Integration (after setup)
+- `wt switch [pattern]` - Switch to worktree (shell function only)
+- `wt sw [pattern]` - Short alias for switch (shell function only)  
+- `wts [pattern]` - Ultra-short convenience alias
 
 ### GitHub Integration
 - `wt pr <pr-number>` - Create worktree from GitHub PR
 
 ### Repository Management
 - `wt init <git-url> [name]` - Initialize bare repository
+- `wt setup --bash|--zsh|--fish|--auto` - Generate shell wrapper functions
 - `wt status` - Show repository and worktree status
 - `wt clean` - Remove orphaned worktrees
 
@@ -151,6 +165,43 @@ This ensures new worktrees are created in the same location as existing ones, pr
 - `wt config` - Manage configuration
 - `wt config <key>` - Show config value
 - `wt config <key> <value>` - Set config value
+
+## Shell Integration
+
+To enable directory switching, WT provides shell wrapper functions that must be sourced into your shell:
+
+### Setup (One-time)
+
+Add this line to your shell configuration file:
+
+```bash
+# Bash: ~/.bashrc
+source <(wt setup --bash)
+
+# Zsh: ~/.zshrc  
+source <(wt setup --zsh)
+
+# Fish: ~/.config/fish/config.fish
+source (wt setup --fish | psub)
+
+# Auto-detect shell
+source <(wt setup --auto)
+```
+
+### How It Works
+
+1. **Direct Commands**: Commands like `wt create`, `wt list`, `wt print-dir` work normally
+2. **Shell Functions**: `wt switch`, `wt sw`, and `wts` are shell functions that:
+   - Call `wt print-dir` to get the target directory
+   - Use `cd` to change to that directory
+   - Fall back to normal error handling if the path resolution fails
+
+### Shell Function Benefits
+
+- **Seamless switching**: `wt switch feature` actually changes your current directory
+- **Multiple convenience levels**: `wt switch`, `wt sw`, or `wts` for different typing preferences
+- **Script compatibility**: Use `wt print-dir` directly in scripts for path resolution
+- **Clean separation**: Core functionality remains shell-independent
 
 ## Development
 
