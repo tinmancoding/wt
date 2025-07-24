@@ -225,13 +225,13 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Test path resolution with existing worktrees
 
 **Tasks**:
-- [ ] Remove legacy `wt switch` command and related tests
-- [ ] Implement `wt print-dir [pattern]` command
-- [ ] Add pattern matching for worktree names
-- [ ] Handle single match auto-selection
-- [ ] Handle multiple matches with user selection
-- [ ] Clean stdout output for shell function consumption
-- [ ] Proper error handling for non-existent worktrees
+- [x] Remove legacy `wt switch` command and related tests
+- [x] Implement `wt print-dir [pattern]` command
+- [x] Add pattern matching for worktree names
+- [x] Handle single match auto-selection
+- [x] Handle multiple matches with user selection
+- [x] Clean stdout output for shell function consumption
+- [x] Proper error handling for non-existent worktrees
 
 **Test Command**: `wt print-dir feat` (should output directory path)
 

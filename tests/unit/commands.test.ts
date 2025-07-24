@@ -228,4 +228,31 @@ describe("Commands Unit Tests", () => {
       expect(errorPatterns.arguments.test("Branch name is required")).toBe(true);
     });
   });
+
+  describe("printDirCommand", () => {
+    // Import the command for testing
+    test("should export printDirCommand function", async () => {
+      const { printDirCommand } = await import("../../src/commands/index.ts");
+      expect(printDirCommand).toBeDefined();
+      expect(printDirCommand.name).toBe("print-dir");
+      expect(printDirCommand.description).toBe("Print directory path of matching worktree");
+    });
+
+    test("should have correct command configuration", async () => {
+      const { printDirCommand } = await import("../../src/commands/index.ts");
+      expect(printDirCommand.args).toBeDefined();
+      expect(Array.isArray(printDirCommand.args)).toBe(true);
+      if (printDirCommand.args) {
+        expect(printDirCommand.args).toHaveLength(1);
+        expect(printDirCommand.args[0]?.name).toBe("pattern");
+        expect(printDirCommand.args[0]?.required).toBe(false);
+      }
+      expect(printDirCommand.handler).toBeDefined();
+      expect(typeof printDirCommand.handler).toBe("function");
+    });
+
+    // Note: Full testing of printDirCommand will be done in integration tests
+    // as it involves complex file system operations and git command execution
+    // that are better tested end-to-end
+  });
 });

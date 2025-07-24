@@ -16,7 +16,6 @@ export class HelpSystem {
       '',
       'Usage:',
       `  ${this.config.name} [command] [options]`,
-      `  ${this.config.name} [pattern]                    # Fuzzy switch to worktree`,
       '',
       'Commands:'
     ];
@@ -35,8 +34,7 @@ export class HelpSystem {
       '',
       'Examples:',
       `  ${this.config.name} create feature-branch      # Create worktree for feature-branch`,
-      `  ${this.config.name} feat                       # Switch to worktree matching "feat"`,
-      `  ${this.config.name} pr 123                     # Create worktree from PR #123`,
+      `  ${this.config.name} print-dir feat             # Print path of worktree matching "feat"`,  
       `  ${this.config.name} list                       # List all worktrees`,
       `  ${this.config.name} --help                     # Show this help`,
       '',

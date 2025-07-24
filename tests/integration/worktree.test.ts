@@ -552,9 +552,9 @@ describe('Worktree List Command Integration', () => {
     });
   });
 
-  describe('Worktree Switching', () => {
+  describe('Print-Dir Command', () => {
     beforeEach(async () => {
-      // Initialize git repository for switching tests
+      // Initialize git repository for print-dir tests
       await runGit(['init'], repoDir);
       await runGit(['config', 'user.email', 'test@example.com'], repoDir);
       await runGit(['config', 'user.name', 'Test User'], repoDir);
@@ -565,73 +565,86 @@ describe('Worktree List Command Integration', () => {
       await runGit(['commit', '-m', 'Initial commit'], repoDir);
     });
 
-    test('should switch to single worktree without pattern', async () => {
-      // Create a worktree  
-      await runWT(['create', 'feature-switch'], repoDir);
+    test('should print path of single matching worktree', async () => {
+      // Create a worktree
+      await runWT(['create', 'feature-print'], repoDir);
       
-      // For now, just test that the switch command exists and can handle the case
-      // Testing interactive selection requires complex stdin mocking
-      // This test verifies the command exists and doesn't crash
-      const result = await runWT(['switch', 'feature-switch'], repoDir);
+      // Print directory path
+      const result = await runWT(['print-dir', 'feature-print'], repoDir);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('feature-switch');
+      expect(result.stdout.trim()).toContain('feature-print');
+      expect(result.stderr.trim()).toBe('');
     });
 
-    test('should switch to worktree with exact pattern match', async () => {
+    test('should handle exact pattern match', async () => {
       // Create multiple worktrees
       await runWT(['create', 'feature-one'], repoDir);
       await runWT(['create', 'feature-two'], repoDir);
       
-      // Switch to specific worktree
-      const result = await runWT(['switch', 'feature-one'], repoDir);
+      // Print directory path for exact match
+      const result = await runWT(['print-dir', 'feature-one'], repoDir);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('feature-one');
+      expect(result.stdout.trim()).toContain('feature-one');
+      expect(result.stderr.trim()).toBe('');
     });
 
-    test('should switch using default command (no command specified)', async () => {
-      // Create a worktree
-      await runWT(['create', 'feature-default'], repoDir);
-      
-      // Use default command behavior (pattern as first argument)
-      const result = await runWT(['feature-default'], repoDir);
-      
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('feature-default');
-    });
-
-    test('should handle pattern with partial match', async () => {
+    test('should handle partial pattern match', async () => {
       // Create a worktree with longer name
       await runWT(['create', 'feature-partial-match'], repoDir);
       
-      // Switch using partial pattern
-      const result = await runWT(['switch', 'partial'], repoDir);
+      // Print directory path using partial pattern
+      const result = await runWT(['print-dir', 'partial'], repoDir);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('feature-partial-match');
+      expect(result.stdout.trim()).toContain('feature-partial-match');
+    });
+
+    test('should fail when no pattern provided', async () => {
+      const result = await runWT(['print-dir'], repoDir);
+      
+      expect(result.exitCode).toBe(2); // INVALID_ARGUMENTS
+      expect(result.stderr).toContain('Pattern is required for print-dir command');
     });
 
     test('should fail when no worktrees match pattern', async () => {
-      // Try to switch to non-existent pattern
-      const result = await runWT(['switch', 'nonexistent'], repoDir);
+      const result = await runWT(['print-dir', 'nonexistent'], repoDir);
       
-      expect(result.exitCode).toBe(1);
+      expect(result.exitCode).toBe(1); // GENERAL_ERROR
       expect(result.stderr).toContain('No worktrees found matching pattern: nonexistent');
     });
 
-    test('should handle no worktrees found gracefully', async () => {
-      // Test with the main repository that has no additional worktrees
-      // The main working directory itself counts as a worktree, so this test
-      // should actually verify the case where pattern doesn't match
-      const result = await runWT(['switch', 'nonexistent-pattern'], repoDir);
+    test('should handle multiple matches with error and suggestions', async () => {
+      // Create multiple worktrees with similar names
+      await runWT(['create', 'feature-one'], repoDir);
+      await runWT(['create', 'feature-two'], repoDir);
       
-      // Should exit with general error when no worktrees match the pattern
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain('No worktrees found matching pattern: nonexistent-pattern');
+      // Try to print directory with ambiguous pattern
+      const result = await runWT(['print-dir', 'feature'], repoDir);
+      
+      expect(result.exitCode).toBe(1); // GENERAL_ERROR
+      expect(result.stderr).toContain('Multiple worktrees match pattern "feature"');
+      expect(result.stderr).toContain('Please be more specific');
+      expect(result.stderr).toContain('feature-one');
+      expect(result.stderr).toContain('feature-two');
     });
 
-    // Note: Interactive selection tests would require complex stdin simulation
-    // These are tested manually and through higher-level workflow tests
+    test('should output clean path for shell consumption', async () => {
+      // Create a worktree
+      await runWT(['create', 'clean-output'], repoDir);
+      
+      // Print directory path
+      const result = await runWT(['print-dir', 'clean-output'], repoDir);
+      
+      expect(result.exitCode).toBe(0);
+      // Should only contain the path, nothing else
+      const lines = result.stdout.trim().split('\n');
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('clean-output');
+      // Should not contain any extra text
+      expect(result.stdout).not.toContain('Switching to');
+      expect(result.stdout).not.toContain('Found worktree');
+    });
   });
 });

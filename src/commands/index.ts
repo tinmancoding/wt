@@ -9,8 +9,7 @@ import {
   findWorktreesByPattern,
   removeWorktree,
   deleteBranch,
-  promptConfirmation,
-  handleWorktreeSwitch
+  promptConfirmation
 } from '../worktree.ts';
 import { EXIT_CODES } from '../cli/types.ts';
 import { basename } from 'path';
@@ -324,11 +323,11 @@ export const removeCommand: Command = {
 };
 
 /**
- * Switch command - switches to a worktree matching the given pattern
+ * Print-Dir command - prints directory path of matching worktree
  */
-export const switchCommand: Command = {
-  name: 'switch',
-  description: 'Switch to a worktree matching the given pattern',
+export const printDirCommand: Command = {
+  name: 'print-dir',
+  description: 'Print directory path of matching worktree',
   args: [
     {
       name: 'pattern',
@@ -340,11 +339,48 @@ export const switchCommand: Command = {
     try {
       const pattern = positional[0];
       const repoInfo = await detectRepository();
+      const worktrees = await listWorktrees(repoInfo);
       
-      await handleWorktreeSwitch(repoInfo, pattern);
+      if (worktrees.length === 0) {
+        console.error('No worktrees found.');
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+      
+      // If no pattern provided, show error
+      if (!pattern) {
+        console.error('Error: Pattern is required for print-dir command');
+        process.exit(EXIT_CODES.INVALID_ARGUMENTS);
+      }
+      
+      // Find matching worktrees
+      const matchingWorktrees = findWorktreesByPattern(worktrees, pattern);
+      
+      if (matchingWorktrees.length === 0) {
+        console.error(`No worktrees found matching pattern: ${pattern}`);
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+      
+      if (matchingWorktrees.length === 1) {
+        // Single match, print path to stdout
+        const worktree = matchingWorktrees[0];
+        if (worktree) {
+          console.log(worktree.path);
+        }
+        return;
+      }
+      
+      // Multiple matches - show options and error
+      console.error(`Multiple worktrees match pattern "${pattern}":`);
+      console.error(formatWorktreeHeader());
+      for (const worktree of matchingWorktrees) {
+        console.error(formatWorktree(worktree));
+      }
+      console.error('\nPlease be more specific with your pattern.');
+      process.exit(EXIT_CODES.GENERAL_ERROR);
+      
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error(`Error switching worktree: ${message}`);
+      console.error(`Error finding worktree: ${message}`);
       
       // Use specific exit code for repository errors
       if (error instanceof RepositoryError) {
