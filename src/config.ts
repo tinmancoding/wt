@@ -2,13 +2,14 @@
  * Configuration management for WT
  */
 
-import { join, resolve } from 'node:path';
+import { join, resolve, relative, dirname } from 'node:path';
 import { readFile, writeFile, access, constants } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { EXIT_CODES } from './cli/types.ts';
 import type { RepositoryInfo } from './repository.ts';
 
 export interface WTConfig {
-  /** Directory where worktrees are created, relative to .bare parent */
+  /** Directory where worktrees are created, relative to .bare parent (auto-detected if not set) */
   worktreeDir: string;
   /** Whether to auto-fetch before create operations */
   autoFetch: boolean;
@@ -44,10 +45,10 @@ export class ConfigError extends Error {
 }
 
 /**
- * Default configuration values
+ * Default configuration values (worktreeDir will be auto-detected)
  */
-export const DEFAULT_CONFIG: WTConfig = Object.freeze({
-  worktreeDir: './',
+export const DEFAULT_CONFIG: Omit<WTConfig, 'worktreeDir'> & { worktreeDir: string } = Object.freeze({
+  worktreeDir: './', // This is a fallback; actual default is auto-detected
   autoFetch: true,
   confirmDelete: false,
   hooks: Object.freeze({
@@ -58,11 +59,119 @@ export const DEFAULT_CONFIG: WTConfig = Object.freeze({
 });
 
 /**
- * Creates a deep copy of the default configuration
+ * Configuration file name
  */
-function createDefaultConfig(): WTConfig {
+export const CONFIG_FILE_NAME = '.wtconfig.json';
+
+/**
+ * Executes a git command and returns the output
+ */
+async function executeGitCommand(gitDir: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn('git', ['--git-dir', gitDir, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env } // Explicitly pass environment
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    childProcess.stdout?.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    childProcess.stderr?.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    childProcess.on('close', (code: number | null) => {
+      if (code === 0) {
+        resolve(stdout.trim());
+      } else {
+        reject(new Error(`Git command failed: ${stderr.trim()}`));
+      }
+    });
+  });
+}
+
+/**
+ * Detects the appropriate default worktree directory based on existing worktrees
+ */
+async function detectDefaultWorktreeDir(repoInfo: RepositoryInfo): Promise<string> {
+  try {
+    // Get list of all worktrees
+    const worktreeList = await executeGitCommand(repoInfo.gitDir, ['worktree', 'list', '--porcelain']);
+    
+    if (!worktreeList) {
+      // No worktrees found, fall back to repository root
+      return './';
+    }
+
+    // Parse worktree list to get paths
+    const worktreePaths: string[] = [];
+    const lines = worktreeList.split('\n');
+    
+    for (const line of lines) {
+      if (line.startsWith('worktree ')) {
+        const path = line.substring(9); // Remove 'worktree ' prefix
+        if (path) { // Only add non-empty paths
+          worktreePaths.push(resolve(path));
+        }
+      }
+    }
+
+    if (worktreePaths.length === 0) {
+      return './';
+    }
+
+    if (worktreePaths.length === 1) {
+      // Only one worktree (the main one), use its parent directory
+      const worktreeParent = dirname(worktreePaths[0] || '');
+      if (worktreeParent) {
+        return relative(repoInfo.rootDir, worktreeParent) || './';
+      }
+      return './';
+    }
+
+    // Multiple worktrees - find their common parent directory
+    let commonParent = dirname(worktreePaths[0] || '');
+    
+    for (let i = 1; i < worktreePaths.length; i++) {
+      const currentParent = dirname(worktreePaths[i] || '');
+      
+      if (currentParent && commonParent) {
+        // Find the longest common path
+        while (!currentParent.startsWith(commonParent)) {
+          commonParent = dirname(commonParent);
+          if (commonParent === dirname(commonParent)) {
+            // Reached filesystem root
+            break;
+          }
+        }
+      }
+    }
+
+    // Return path relative to repository root
+    if (commonParent) {
+      const relativePath = relative(repoInfo.rootDir, commonParent);
+      return relativePath || './';
+    }
+    return './';
+    
+  } catch (error) {
+    // If git command fails or any other error, fall back to current directory
+    return './';
+  }
+}
+
+/**
+ * Creates a default configuration with auto-detected worktree directory
+ */
+async function createDefaultConfig(repoInfo: RepositoryInfo): Promise<WTConfig> {
+  const defaultWorktreeDir = await detectDefaultWorktreeDir(repoInfo);
+  
   return {
-    worktreeDir: './',
+    worktreeDir: defaultWorktreeDir,
     autoFetch: true,
     confirmDelete: false,
     hooks: {
@@ -72,11 +181,6 @@ function createDefaultConfig(): WTConfig {
     defaultBranch: 'main'
   };
 }
-
-/**
- * Configuration file name
- */
-export const CONFIG_FILE_NAME = '.wtconfig.json';
 
 /**
  * Loads and parses .wtconfig.json from the repository root
@@ -92,8 +196,8 @@ export async function loadConfig(repoInfo: RepositoryInfo): Promise<WTConfig> {
     const configContent = await readFile(configPath, 'utf-8');
     const parsedConfig = JSON.parse(configContent) as PartialWTConfig;
     
-    // Validate and merge with defaults
-    return validateAndMergeConfig(parsedConfig);
+    // Validate and merge with defaults (including auto-detected worktreeDir)
+    return await validateAndMergeConfig(parsedConfig, repoInfo);
     
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -105,7 +209,7 @@ export async function loadConfig(repoInfo: RepositoryInfo): Promise<WTConfig> {
     
     // If file doesn't exist, return default config
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return createDefaultConfig();
+      return await createDefaultConfig(repoInfo);
     }
     
     // Re-throw other filesystem errors
@@ -119,8 +223,8 @@ export async function loadConfig(repoInfo: RepositoryInfo): Promise<WTConfig> {
 /**
  * Validates configuration values and merges with defaults
  */
-export function validateAndMergeConfig(partialConfig: PartialWTConfig): WTConfig {
-  const config: WTConfig = createDefaultConfig();
+export async function validateAndMergeConfig(partialConfig: PartialWTConfig, repoInfo: RepositoryInfo): Promise<WTConfig> {
+  const config: WTConfig = await createDefaultConfig(repoInfo);
   
   // Validate and set worktreeDir
   if (partialConfig.worktreeDir !== undefined) {
@@ -249,7 +353,7 @@ export async function updateConfigValue(
   }
   
   // Validate the updated configuration
-  const validatedConfig = validateAndMergeConfig(currentConfig);
+  const validatedConfig = await validateAndMergeConfig(currentConfig, repoInfo);
   
   // Save the updated configuration
   await saveConfig(repoInfo, validatedConfig);

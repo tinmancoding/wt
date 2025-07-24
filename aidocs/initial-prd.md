@@ -107,7 +107,7 @@ Walk up directory tree looking for:
 **Schema**:
 ```json
 {
-  "worktreeDir": "./",           // Relative to .bare parent
+  "worktreeDir": "./",           // Auto-detected from existing worktrees if not set
   "autoFetch": true,             // Fetch before create operations  
   "confirmDelete": false,        // Confirm before removing worktrees
   "hooks": {
@@ -117,6 +117,40 @@ Walk up directory tree looking for:
   "defaultBranch": "main"        // Fallback default branch
 }
 ```
+
+#### Smart WorktreeDir Detection
+
+The `worktreeDir` configuration uses intelligent auto-detection to determine the optimal location for new worktrees:
+
+**Detection Algorithm**:
+1. **Multiple worktrees exist**: Analyzes all existing worktrees using `git worktree list` and finds their common parent directory
+2. **Single worktree exists**: Uses the parent directory of the existing worktree
+3. **No additional worktrees**: Falls back to repository root (`./`)
+4. **Git command failure**: Safe fallback to repository root (`./`)
+
+**Examples**:
+```bash
+# Scenario 1: Bare repository with worktrees as siblings
+/project/
+  .bare/           # Bare repository
+  main/            # Main worktree  
+  feature-1/       # Additional worktree
+# Result: worktreeDir = "./" (relative to /project/)
+
+# Scenario 2: Bare repository with organized worktree directory
+/project/
+  .bare/           # Bare repository
+  worktrees/
+    main/          # Main worktree
+    feature-1/     # Additional worktree
+# Result: worktreeDir = "./worktrees/" (relative to /project/)
+
+# Scenario 3: Standard git repository
+/project/.git/     # Standard git directory
+# Result: worktreeDir = "./" (repository root)
+```
+
+**User Override**: Users can explicitly set `worktreeDir` in `.wtconfig.json` to override auto-detection for custom workflows.
 
 #### Hook System
 - Execute after successful worktree creation/removal

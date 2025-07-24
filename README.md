@@ -84,7 +84,7 @@ my-project/
 
 ## Configuration
 
-Create a `.wtconfig.json` file in your repository root:
+WT automatically detects the optimal location for worktrees based on your repository structure. You can customize behavior with a `.wtconfig.json` file in your repository root:
 
 ```json
 {
@@ -98,6 +98,36 @@ Create a `.wtconfig.json` file in your repository root:
   "defaultBranch": "main"
 }
 ```
+
+### Smart WorktreeDir Detection
+
+The `worktreeDir` setting uses intelligent auto-detection when not explicitly configured:
+
+**Detection Logic**:
+- **Multiple worktrees**: Finds the common parent directory of all existing worktrees
+- **Single worktree**: Uses the parent directory of the existing worktree  
+- **No additional worktrees**: Defaults to repository root
+- **Manual override**: Set `worktreeDir` explicitly to override auto-detection
+
+**Examples**:
+```bash
+# Scenario 1: Worktrees as siblings to .bare
+/project/
+  .bare/         # Bare repository
+  main/          # Main worktree
+  feature-1/     # Additional worktree
+# Auto-detected worktreeDir: "./"
+
+# Scenario 2: Organized worktree directory
+/project/
+  .bare/         # Bare repository  
+  worktrees/
+    main/        # Main worktree
+    feature-1/   # Additional worktree
+# Auto-detected worktreeDir: "./worktrees/"
+```
+
+This ensures new worktrees are created in the same location as existing ones, providing consistent project organization.
 
 ## Commands
 

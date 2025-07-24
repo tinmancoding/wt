@@ -7,12 +7,20 @@ import {
   ConfigError
 } from '../../src/config.ts';
 import type { WTConfig, PartialWTConfig } from '../../src/config.ts';
+import type { RepositoryInfo } from '../../src/repository.ts';
+
+// Mock repository info for testing
+const mockRepoInfo: RepositoryInfo = {
+  rootDir: '/test/repo',
+  gitDir: '/test/repo/.git',
+  type: 'standard'
+};
 
 describe('Configuration System', () => {
   describe('DEFAULT_CONFIG', () => {
     test('should have expected default values', () => {
       expect(DEFAULT_CONFIG).toEqual({
-        worktreeDir: './',
+        worktreeDir: './', // This is a fallback; actual default is auto-detected
         autoFetch: true,
         confirmDelete: false,
         hooks: {
@@ -25,81 +33,85 @@ describe('Configuration System', () => {
   });
 
   describe('validateAndMergeConfig', () => {
-    test('should return default config for empty partial config', () => {
-      const result = validateAndMergeConfig({});
-      expect(result).toEqual(DEFAULT_CONFIG);
+    test('should return default config for empty partial config', async () => {
+      const result = await validateAndMergeConfig({}, mockRepoInfo);
+      expect(result.autoFetch).toBe(true);
+      expect(result.confirmDelete).toBe(false);
+      expect(result.defaultBranch).toBe('main');
+      expect(result.hooks.postCreate).toBeNull();
+      expect(result.hooks.postRemove).toBeNull();
+      // worktreeDir may vary based on auto-detection, so we just check it's a string
+      expect(typeof result.worktreeDir).toBe('string');
     });
 
-    test('should merge partial config with defaults', () => {
+    test('should merge partial config with defaults', async () => {
       const partial: PartialWTConfig = {
         autoFetch: false,
         defaultBranch: 'develop'
       };
 
-      const result = validateAndMergeConfig(partial);
-      expect(result).toEqual({
-        ...DEFAULT_CONFIG,
-        autoFetch: false,
-        defaultBranch: 'develop'
-      });
+      const result = await validateAndMergeConfig(partial, mockRepoInfo);
+      expect(result.autoFetch).toBe(false);
+      expect(result.defaultBranch).toBe('develop');
+      expect(result.confirmDelete).toBe(false); // default value
     });
 
-    test('should validate worktreeDir type', () => {
-      expect(() => validateAndMergeConfig({ worktreeDir: 123 as any }))
-        .toThrow(ConfigError);
+    test('should validate worktreeDir type', async () => {
+      await expect(validateAndMergeConfig({ worktreeDir: 123 as any }, mockRepoInfo))
+        .rejects.toThrow(ConfigError);
     });
 
-    test('should validate autoFetch type', () => {
-      expect(() => validateAndMergeConfig({ autoFetch: 'true' as any }))
-        .toThrow(ConfigError);
+    test('should validate autoFetch type', async () => {
+      await expect(validateAndMergeConfig({ autoFetch: 'true' as any }, mockRepoInfo))
+        .rejects.toThrow(ConfigError);
     });
 
-    test('should validate confirmDelete type', () => {
-      expect(() => validateAndMergeConfig({ confirmDelete: 'false' as any }))
-        .toThrow(ConfigError);
+    test('should validate confirmDelete type', async () => {
+      await expect(validateAndMergeConfig({ confirmDelete: 'false' as any }, mockRepoInfo))
+        .rejects.toThrow(ConfigError);
     });
 
-    test('should validate defaultBranch type', () => {
-      expect(() => validateAndMergeConfig({ defaultBranch: 123 as any }))
-        .toThrow(ConfigError);
+    test('should validate defaultBranch type', async () => {
+      await expect(validateAndMergeConfig({ defaultBranch: 123 as any }, mockRepoInfo))
+        .rejects.toThrow(ConfigError);
     });
 
-    test('should validate hooks object type', () => {
-      expect(() => validateAndMergeConfig({ hooks: 'invalid' as any }))
-        .toThrow(ConfigError);
+    test('should validate hooks object type', async () => {
+      await expect(validateAndMergeConfig({ hooks: 'invalid' as any }, mockRepoInfo))
+        .rejects.toThrow(ConfigError);
     });
 
-    test('should validate hooks.postCreate type', () => {
-      expect(() => validateAndMergeConfig({ 
+    test('should validate hooks.postCreate type', async () => {
+      await expect(validateAndMergeConfig({ 
         hooks: { postCreate: 123 as any } 
-      })).toThrow(ConfigError);
+      }, mockRepoInfo)).rejects.toThrow(ConfigError);
     });
 
-    test('should validate hooks.postRemove type', () => {
-      expect(() => validateAndMergeConfig({ 
+    test('should validate hooks.postRemove type', async () => {
+      await expect(validateAndMergeConfig({ 
         hooks: { postRemove: true as any } 
-      })).toThrow(ConfigError);
+      }, mockRepoInfo)).rejects.toThrow(ConfigError);
     });
 
-    test('should allow null hook values', () => {
-      const result = validateAndMergeConfig({
+    test('should allow null hook values', async () => {
+      const result = await validateAndMergeConfig({
         hooks: {
           postCreate: null,
           postRemove: null
         }
-      });
+      }, mockRepoInfo);
 
       expect(result.hooks.postCreate).toBeNull();
       expect(result.hooks.postRemove).toBeNull();
     });
 
-    test('should allow string hook values', () => {
-      const result = validateAndMergeConfig({
+    test('should allow string hook values', async () => {
+      const result = await validateAndMergeConfig({
         hooks: {
           postCreate: '/path/to/script.sh',
           postRemove: 'cleanup-command'
         }
-      });
+      }, mockRepoInfo);
 
       expect(result.hooks.postCreate).toBe('/path/to/script.sh');
       expect(result.hooks.postRemove).toBe('cleanup-command');
@@ -108,8 +120,10 @@ describe('Configuration System', () => {
 
   describe('getConfigValue', () => {
     const config: WTConfig = {
-      ...DEFAULT_CONFIG,
+      worktreeDir: './',
       autoFetch: false,
+      confirmDelete: false,
+      defaultBranch: 'main',
       hooks: {
         postCreate: '/custom/script.sh',
         postRemove: null

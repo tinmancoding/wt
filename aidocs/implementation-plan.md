@@ -66,12 +66,19 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Run config commands and verify output
 
 **Tasks**:
-- [ ] Implement `wt config` (show all config)
-- [ ] Implement `wt config <key>` (show specific value)
-- [ ] Implement `wt config <key> <value>` (set value)
-- [ ] Add config validation for known keys
+- [x] Implement `wt config` (show all config)
+- [x] Implement `wt config <key>` (show specific value)
+- [x] Implement `wt config <key> <value>` (set value)
+- [x] Add config validation for known keys
+- [x] Implement smart worktreeDir auto-detection
 
 **Test Command**: `wt config && wt config worktreeDir && wt config autoFetch false`
+
+**Smart WorktreeDir Implementation**:
+- [x] Create `detectDefaultWorktreeDir()` function using `git worktree list`
+- [x] Implement intelligent fallback logic for different repository scenarios
+- [x] Update config loading to use dynamic defaults instead of static `./`
+- [x] Maintain backward compatibility for explicit user configurations
 
 ## Phase 3: Basic Worktree Operations (2-3 hours)
 
