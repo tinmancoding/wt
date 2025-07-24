@@ -13,6 +13,9 @@ import {
   removeWorktree,
   deleteBranch,
   promptConfirmation,
+  switchToWorktree,
+  promptWorktreeSelection,
+  handleWorktreeSwitch,
   type WorktreeInfo,
   type BranchResolution
 } from '../../src/worktree.ts';
@@ -673,6 +676,35 @@ describe('Worktree Module', () => {
     // Integration tests will cover the full interactive behavior
     test('promptConfirmation function exists and is callable', () => {
       expect(typeof promptConfirmation).toBe('function');
+    });
+  });
+
+  describe('Worktree Switching', () => {
+    describe('switchToWorktree', () => {
+      test('function exists and is callable', () => {
+        expect(typeof switchToWorktree).toBe('function');
+      });
+
+      // Note: Full testing of switchToWorktree will be done in integration tests
+      // as it involves stdout manipulation that's complex to mock properly
+    });
+
+    describe('promptWorktreeSelection', () => {
+      test('function exists and is callable', () => {
+        expect(typeof promptWorktreeSelection).toBe('function');
+      });
+
+      // Note: This function involves complex stdin/stdout interaction
+      // Full testing will be done in integration tests
+    });
+
+    describe('handleWorktreeSwitch', () => {
+      test('function exists and is callable', () => {
+        expect(typeof handleWorktreeSwitch).toBe('function');
+      });
+
+      // Note: Full integration testing of handleWorktreeSwitch will be done in integration tests
+      // as it involves complex async user interaction and subprocess handling
     });
   });
 });

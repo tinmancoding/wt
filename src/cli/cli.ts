@@ -59,8 +59,24 @@ export class CLI {
         process.exit(EXIT_CODES.SUCCESS);
       }
 
-      // If no command specified and no version/help requested, show help
+      // If no command specified and no version/help requested
       if (!parsed.command) {
+        // If there are positional arguments, treat as switch pattern
+        if (parsed.positional.length > 0) {
+          // Treat first positional argument as pattern for switching
+          const switchCommand = this.commands.get('switch');
+          if (switchCommand) {
+            const context: CommandContext = {
+              args: {},
+              flags: parsed.flags,
+              positional: parsed.positional
+            };
+            await switchCommand.handler(context);
+            return;
+          }
+        }
+        
+        // Otherwise show help
         console.log(this.help.generateMainHelp(Array.from(new Set(this.commands.values()))));
         process.exit(EXIT_CODES.SUCCESS);
       }
@@ -68,6 +84,19 @@ export class CLI {
       // Find and execute command
       const command = this.commands.get(parsed.command);
       if (!command) {
+        // If command doesn't exist, check if it might be a switch pattern
+        const switchCommand = this.commands.get('switch');
+        if (switchCommand && parsed.command) {
+          // Treat the unknown command as a switch pattern
+          const context: CommandContext = {
+            args: {},
+            flags: parsed.flags,
+            positional: [parsed.command, ...parsed.positional]
+          };
+          await switchCommand.handler(context);
+          return;
+        }
+        
         console.error(`Unknown command: ${parsed.command}`);
         console.error(`Run '${this.config.name} --help' for available commands.`);
         process.exit(EXIT_CODES.INVALID_ARGUMENTS);

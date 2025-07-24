@@ -225,11 +225,11 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Switch between existing worktrees
 
 **Tasks**:
-- [ ] Implement directory changing to worktree
-- [ ] Add pattern matching for worktree names
-- [ ] Handle single match auto-selection
-- [ ] Handle multiple matches with user selection
-- [ ] Implement `wt [pattern]` and `wt switch [pattern]` commands
+- [x] Implement directory changing to worktree
+- [x] Add pattern matching for worktree names
+- [x] Handle single match auto-selection
+- [x] Handle multiple matches with user selection
+- [x] Implement `wt [pattern]` and `wt switch [pattern]` commands
 
 **Test Command**: `wt feat` (if multiple feature branches exist)
 

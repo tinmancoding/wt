@@ -9,7 +9,8 @@ import {
   findWorktreesByPattern,
   removeWorktree,
   deleteBranch,
-  promptConfirmation
+  promptConfirmation,
+  handleWorktreeSwitch
 } from '../worktree.ts';
 import { EXIT_CODES } from '../cli/types.ts';
 import { basename } from 'path';
@@ -311,6 +312,39 @@ export const removeCommand: Command = {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error(`Error removing worktree: ${message}`);
+      
+      // Use specific exit code for repository errors
+      if (error instanceof RepositoryError) {
+        process.exit(EXIT_CODES.GIT_REPO_NOT_FOUND);
+      } else {
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+    }
+  }
+};
+
+/**
+ * Switch command - switches to a worktree matching the given pattern
+ */
+export const switchCommand: Command = {
+  name: 'switch',
+  description: 'Switch to a worktree matching the given pattern',
+  args: [
+    {
+      name: 'pattern',
+      description: 'Pattern to match worktree names, branches, or paths',
+      required: false
+    }
+  ],
+  handler: async ({ positional }) => {
+    try {
+      const pattern = positional[0];
+      const repoInfo = await detectRepository();
+      
+      await handleWorktreeSwitch(repoInfo, pattern);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error switching worktree: ${message}`);
       
       // Use specific exit code for repository errors
       if (error instanceof RepositoryError) {
