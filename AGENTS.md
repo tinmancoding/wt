@@ -28,5 +28,11 @@ devbox run bun run build               # Production build (creates ./wt binary)
 - If the Context7 MCP is available, please use it to get the proper API for bun and other TypeScript libraries.
 
 ## Behaviour
-- For feature implementation: Don't move to the next task until all the linting errors are fixed and all the tests are passing. 
+- For feature implementation: Don't move to the next task until all the linting errors are fixed and all the tests are passing.
+
+## Testing Requirements
+- **Unit Tests**: Full coverage (100% goal) with complete mocking of external dependencies
+- **Integration Tests**: Focus on main functionality and most commonly used scenarios
+- **Every Phase**: Write both unit and integration tests before proceeding
+- **Quality Gates**: All tests must pass before advancing to next phase/task 
 

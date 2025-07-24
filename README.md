@@ -167,18 +167,40 @@ devbox shell
 # Run in development mode
 bun run dev [command]
 
-# Run tests
-bun run test
-bun run test:unit      # Unit tests only
-bun run test:integration  # Integration tests only
+# Testing (comprehensive coverage required)
+bun run test                    # Run all tests  
+bun run test:unit              # Unit tests with full coverage
+bun run test:integration       # Integration tests for main workflows
 
-# Type checking and linting
-bun run type-check
-bun run lint
+# Quality assurance (all must pass before commits)
+bun run type-check             # TypeScript validation
+bun run lint                   # Code style validation
 
 # Build production binary
 bun run build
 ```
+
+### Testing Strategy
+
+The project uses a comprehensive testing approach with two complementary testing levels:
+
+**Unit Tests** - Full coverage with isolated testing:
+- Complete mocking of external dependencies (git, file system)
+- 100% coverage goal for all core functionality
+- Comprehensive edge case and error condition testing
+- Fast execution with predictable, isolated test conditions
+
+**Integration Tests** - Real-world workflow validation:
+- End-to-end testing with actual git operations
+- Focus on most commonly used features and workflows
+- Testing with various repository structures and states
+- Validation of user experience and error handling
+
+**Quality Gates**:
+- All tests must pass before advancing to new features
+- No commits allowed with failing tests or linting errors
+- TypeScript compilation must succeed without errors
+- Integration tests validate real-world usage scenarios
 
 ### Project Structure
 ```
@@ -189,9 +211,9 @@ wt/
 │   ├── index.ts       # Entry point
 │   └── repository.ts  # Repository detection
 ├── tests/
-│   ├── unit/          # Unit tests with mocks
-│   ├── integration/   # Integration tests
-│   └── fixtures/      # Test data
+│   ├── unit/          # Unit tests with mocks (full coverage)
+│   ├── integration/   # Integration tests (main workflows)
+│   └── fixtures/      # Test data and repositories
 ├── docs/              # Documentation
 ├── devbox.json        # Development environment
 └── package.json       # Dependencies and scripts
@@ -210,9 +232,14 @@ Git worktrees allow you to have multiple working directories for a single reposi
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature-name`
-3. Make changes and add tests
-4. Run the test suite: `bun run test`
-5. Submit a pull request
+3. Make changes and add comprehensive tests:
+   - Write unit tests for all new functionality (aim for 100% coverage)
+   - Add integration tests for main user workflows
+   - Ensure all tests pass: `bun run test`
+4. Validate code quality:
+   - Type check: `bun run type-check`
+   - Lint: `bun run lint`
+5. Submit a pull request with test coverage details
 
 ## License
 

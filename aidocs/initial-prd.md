@@ -291,70 +291,92 @@ wt/
 
 ### Testing Strategy
 
+For every development phase, we implement both unit tests and integration tests following these principles:
+
 #### Unit Testing
-**Scope**: Core logic, utility functions, configuration management
+**Scope**: Core logic, utility functions, configuration management  
+**Coverage Goal**: Full coverage (100%) wherever possible
 
 **Approach**:
-- Mock git and GitHub CLI interfaces for isolated testing
-- Test branch resolution logic with various scenarios
-- Validate configuration parsing and validation
-- Test error handling and edge cases
+- **Comprehensive Mocking**: Mock all external dependencies (git, GitHub CLI, file system operations)
+- **Isolated Testing**: Each unit test focuses on a single function or module
+- **Edge Case Coverage**: Test all error conditions, boundary cases, and invalid inputs
+- **Branch Resolution Logic**: Comprehensive testing of all branch scenarios (local, remote, new)
+- **Configuration Management**: Test all config variations, validation, and error handling
+- **Error Handling**: Test every error path and exit code scenario
 
-**Tools**: Bun's built-in test runner, mock interfaces for external commands
+**Mock Strategy**:
+```typescript
+// Mock external commands for predictable testing
+const mockGitCommand = vi.fn()
+const mockGhCommand = vi.fn()
+
+// Test all possible git worktree responses
+mockGitCommand.mockImplementation((args) => {
+  if (args.includes('worktree list')) {
+    return { success: true, stdout: mockWorktreeListOutput }
+  }
+  // Handle all git command variations
+})
+```
+
+**Tools**: Bun's built-in test runner with Vitest-compatible mocking
 
 #### Integration Testing  
-**Scope**: End-to-end workflows with real git operations
+**Scope**: End-to-end workflows with real git operations  
+**Focus**: Main functionality and most commonly used scenarios
 
 **Repository Structure**:
 ```
 wt/
 ├── src/                    # Source code
 ├── tests/
-│   ├── unit/              # Unit tests with mocks
-│   ├── integration/       # Integration tests with real git operations
+│   ├── unit/              # Unit tests with full mocking
+│   ├── integration/       # Integration tests with real operations
 │   └── fixtures/          # Pre-made test repositories and configurations
 ├── temp/                  # Temporary test repositories (gitignored)
 ├── docs/
 └── package.json
 ```
 
-**Testing Strategy**:
-- **Self-testing**: Use WT's own repository for basic integration tests (repository detection, listing)
-- **Temporary repositories**: Generate fresh repos for isolated test scenarios
-- **Fixture repositories**: Small pre-made repositories for specific test cases
+**Testing Philosophy**:
+- **Real Operations**: Use actual git commands for integration tests
+- **Common Scenarios**: Focus on workflows developers use daily
+- **End-to-End Validation**: Test complete user journeys, not just individual commands
+- **Realistic Environments**: Test with various repository structures and states
 
-**Test Scenarios**:
+**Key Integration Scenarios**:
 ```bash
-# Core worktree operations
-- wt init with real GitHub repository
-- wt create with local/remote/new branch scenarios  
-- wt switch between multiple worktrees
-- wt remove with and without --with-branch
-- Repository detection from various directory levels
+# Core worktree workflows (most commonly used)
+- wt create → wt switch → wt remove cycle
+- Repository detection across directory structures
+- Configuration loading and auto-detection
+- Multi-worktree repository management
 
-# GitHub integration (requires authentication)
-- wt pr with test PRs from WT repository itself
-- Error handling for invalid PR numbers
-- Mock GitHub CLI responses for predictable testing
+# GitHub integration (common developer workflow)  
+- wt pr → work → merge workflow
+- Error handling for invalid PRs and network issues
 
-# Advanced workflows
-- wt run with various commands
-- Hook execution and error handling
-- Configuration file management
+# Advanced but common scenarios
+- Hook execution during worktree lifecycle
+- Repository initialization and setup
+- Command execution in worktree context
 ```
 
 **Temporary Repository Creation**:
 ```typescript
-// Example integration test setup
+// Utilities for creating realistic test scenarios
 const tempRepo = await createTempRepo({
   branches: ['main', 'feature-1', 'feature-2'], 
   commits: 5,
   remotes: ['origin'],
-  bareSetup: true  // Create with .bare structure
+  bareSetup: true,  // Create with .bare structure
+  worktrees: ['main', 'feature-1'],  // Pre-create worktrees
+  config: { autoFetch: false }  // Custom configuration
 })
 
-// Run tests against temporary repository
-// Automatic cleanup after test completion
+// Automatic cleanup ensures no test pollution
+// Each test gets a fresh, isolated environment
 ```
 
 **CI/CD Integration**:
@@ -365,27 +387,32 @@ const tempRepo = await createTempRepo({
     git config --global user.name "Test User"
     git config --global user.email "test@example.com"
 
-- name: Integration Tests
+- name: Unit Tests (Full Coverage)
+  run: bun test unit/ --coverage
+  
+- name: Integration Tests (Common Scenarios)
   run: bun test integration/
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-**Mock Strategy for GitHub CLI**:
-- Mock `gh pr view` responses for predictable PR testing
-- Test both success and error scenarios  
-- Use real PRs from WT repository for select integration tests
-- Validate command arguments passed to GitHub CLI
+**Phase-Based Testing Requirements**:
+- **Every Phase**: Unit tests with full coverage of new functionality
+- **Every Phase**: Integration tests for user-facing features
+- **Pre-Commit**: All tests must pass, lint and type-check must succeed
+- **No Moving Forward**: Until all tests pass and coverage targets are met
 
 #### Performance Testing
-- Benchmark worktree creation/switching times
+- Benchmark worktree creation/switching times with large repositories
 - Test with repositories containing many worktrees (50+)
 - Memory usage profiling for large repositories
+- Response time validation for fuzzy finding operations
 
 #### Compatibility Testing  
 - Multiple Git versions (2.5+)
-- Different operating systems (Linux, macOS, Windows/WSL)
+- Different operating systems (Linux, macOS, Windows/WSL)  
 - Various repository structures (bare, standard, submodules)
+- Different terminal environments and shells
 
 ### Success Metrics
 

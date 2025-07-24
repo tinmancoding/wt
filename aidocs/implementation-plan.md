@@ -20,6 +20,10 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 **Test Command**: `devbox shell && bun install && bun run type-check`
 
+**Testing Requirements**:
+- **Unit Tests**: Basic project structure validation, package.json parsing
+- **Integration Tests**: Development environment setup verification
+
 ### Phase 1.2: CLI Framework & Entry Point
 **Duration**: 30 minutes  
 **Manual Test**: Run `bun run dev --help` and verify help output
@@ -33,6 +37,16 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 **Test Command**: `bun run dev --help && bun run dev --version`
 
+**Testing Requirements**:
+- **Unit Tests**: 
+  - Argument parsing with all edge cases (empty args, invalid flags, etc.)
+  - Command dispatch logic with invalid commands
+  - Exit code validation for all error scenarios
+  - Help text formatting and completeness
+- **Integration Tests**: 
+  - CLI startup and basic command execution
+  - Help system accessibility
+
 ### Phase 1.3: Repository Detection System
 **Duration**: 45 minutes  
 **Manual Test**: Navigate to different directories and test repository detection
@@ -45,6 +59,16 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 - [x] Add proper error messages for no repository found
 
 **Test Command**: Test in various directory structures and verify detection
+
+**Testing Requirements**:
+- **Unit Tests**:
+  - Directory walking logic with mocked file system
+  - Each detection method (bare, gitfile, standard) individually
+  - Error handling for permission issues, non-existent paths
+  - Path resolution and normalization edge cases
+- **Integration Tests**:
+  - Real repository detection in various directory structures
+  - Repository detection from different working directories
 
 ## Phase 2: Configuration System (45 minutes)
 
@@ -61,6 +85,17 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 **Test Command**: Create various `.wtconfig.json` files and test parsing
 
+**Testing Requirements**:
+- **Unit Tests**:
+  - Configuration schema validation with all valid/invalid combinations
+  - JSON parsing with malformed files, missing properties
+  - Default value application and override logic
+  - File system error handling (permissions, missing files)
+  - Type safety and runtime validation
+- **Integration Tests**:
+  - Configuration loading from real files in various repository structures
+  - Configuration inheritance and precedence
+
 ### Phase 2.2: Configuration Commands
 **Duration**: 15 minutes  
 **Manual Test**: Run config commands and verify output
@@ -74,11 +109,30 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 **Test Command**: `wt config && wt config worktreeDir && wt config autoFetch false`
 
+**Testing Requirements**:
+- **Unit Tests**:
+  - Config command parsing and validation
+  - Key-value setting with type validation
+  - Invalid key/value handling
+  - Output formatting consistency
+- **Integration Tests**:
+  - Config persistence to file system
+  - Config command execution end-to-end
+
 **Smart WorktreeDir Implementation**:
 - [x] Create `detectDefaultWorktreeDir()` function using `git worktree list`
 - [x] Implement intelligent fallback logic for different repository scenarios
 - [x] Update config loading to use dynamic defaults instead of static `./`
 - [x] Maintain backward compatibility for explicit user configurations
+
+**Additional Testing for WorktreeDir**:
+- **Unit Tests**:
+  - Auto-detection logic with mocked git responses
+  - Fallback scenarios (no worktrees, git errors, etc.)
+  - Path normalization and validation
+- **Integration Tests**:
+  - Auto-detection with real repository structures
+  - Compatibility with existing configurations
 
 ## Phase 3: Basic Worktree Operations (2-3 hours)
 
@@ -94,6 +148,17 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 - [x] Add `wt list` command
 
 **Test Command**: `git worktree add ../test-worktree && wt list`
+
+**Testing Requirements**:
+- **Unit Tests**:
+  - Git worktree list output parsing with various formats
+  - Worktree status detection and formatting
+  - Current worktree identification logic
+  - Empty list and error condition handling
+  - Display formatting and alignment
+- **Integration Tests**:
+  - Listing real worktrees in different repository structures
+  - Current worktree detection from various directories
 
 ### Phase 3.2: Worktree Creation (Smart Branch Resolution)
 **Duration**: 1.5 hours  
@@ -114,6 +179,20 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 2. `wt create origin/remote-branch`  
 3. `wt create brand-new-branch`
 
+**Testing Requirements**:
+- **Unit Tests**:
+  - Branch existence checking logic with mocked git responses
+  - Each branch resolution scenario (local, remote, new) individually
+  - Auto-fetch logic and configuration respect
+  - Warning message generation for outdated branches
+  - Error handling for git command failures
+  - Path validation and worktree name generation
+- **Integration Tests**:
+  - End-to-end worktree creation for all branch scenarios
+  - Auto-fetch behavior with real remote repositories
+  - Worktree creation in different repository structures
+  - Integration with configuration system
+
 ### Phase 3.3: Worktree Removal
 **Duration**: 30 minutes  
 **Manual Test**: Remove worktrees with and without branch deletion
@@ -126,6 +205,18 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 - [ ] Implement `wt remove [pattern] [--with-branch]` command
 
 **Test Command**: `wt remove test-worktree --with-branch`
+
+**Testing Requirements**:
+- **Unit Tests**:
+  - Worktree removal logic with mocked git commands
+  - Pattern matching for worktree selection
+  - Confirmation prompt handling and config integration
+  - Branch deletion logic and safety checks
+  - Error handling for removal failures
+- **Integration Tests**:
+  - Complete removal workflow with real worktrees
+  - Pattern matching with multiple worktrees
+  - Branch deletion verification
 
 ## Phase 4: Fuzzy Finding & Switching (1 hour)
 
@@ -162,26 +253,95 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Run test suite and verify coverage
 
 **Tasks**:
-- [ ] Set up Bun test runner configuration
-- [ ] Create mock interfaces for git commands
-- [ ] Add tests for repository detection
-- [ ] Add tests for configuration management
-- [ ] Add tests for branch resolution logic
+- [ ] Set up Bun test runner configuration with coverage reporting
+- [ ] Create comprehensive mock interfaces for git commands
+- [ ] Create mock interfaces for file system operations
+- [ ] Add tests for repository detection (full coverage)
+- [ ] Add tests for configuration management (full coverage)
+- [ ] Add tests for branch resolution logic (full coverage)
+- [ ] Implement test utilities for common mocking patterns
 
-**Test Command**: `bun test unit/`
+**Test Command**: `bun test unit/ --coverage`
+
+**Testing Requirements**:
+- **Coverage Goal**: 100% line and branch coverage where possible
+- **Mock Strategy**: Complete isolation from external dependencies
+- **Test Organization**: Group tests by module with clear naming
+- **Edge Cases**: Comprehensive testing of error conditions and boundary cases
+
+**Mock Implementation Requirements**:
+```typescript
+// Example comprehensive mocking setup
+interface GitCommandMock {
+  mockWorktreeList(output: string): void
+  mockBranchExists(branch: string, exists: boolean): void  
+  mockFetch(success: boolean): void
+  mockWorktreeAdd(success: boolean): void
+  resetMocks(): void
+}
+
+interface FileSystemMock {
+  mockFileExists(path: string, exists: boolean): void
+  mockDirectoryExists(path: string, exists: boolean): void
+  mockReadFile(path: string, content: string | Error): void
+  mockWriteFile(path: string, success: boolean): void
+}
+```
 
 ### Phase 5.2: Integration Testing Setup  
 **Duration**: 45 minutes  
 **Manual Test**: Run integration tests with temporary repositories
 
 **Tasks**:
-- [ ] Create temporary repository utilities
-- [ ] Add test fixtures for various scenarios
-- [ ] Test worktree operations end-to-end
+- [ ] Create temporary repository utilities with cleanup
+- [ ] Add test fixtures for various repository scenarios
+- [ ] Implement common workflow testing patterns
 - [ ] Add cleanup mechanisms for test repositories
-- [ ] Create integration test suite
+- [ ] Create integration test suite for main user workflows
+- [ ] Set up CI-compatible test environment
 
 **Test Command**: `bun test integration/`
+
+**Testing Requirements**:
+- **Focus**: Most commonly used scenarios and end-to-end workflows
+- **Real Operations**: Use actual git commands, not mocks
+- **Cleanup**: Automatic cleanup of temporary repositories
+- **Isolation**: Each test runs in a fresh environment
+
+**Key Integration Test Scenarios**:
+```typescript
+// Priority integration tests (most common workflows)
+describe('Core Worktree Workflow', () => {
+  test('create → switch → work → remove cycle')
+  test('multiple worktrees management')
+  test('repository detection across directory structures')
+})
+
+describe('Branch Resolution', () => {
+  test('local branch worktree creation')
+  test('remote branch worktree creation with tracking')  
+  test('new branch worktree creation')
+})
+
+describe('Configuration System', () => {
+  test('config auto-detection and loading')
+  test('config persistence and updates')
+})
+```
+
+**Temporary Repository Utilities**:
+```typescript
+interface TempRepoOptions {
+  branches: string[]
+  commits?: number
+  remotes?: string[]
+  bareSetup?: boolean
+  worktrees?: string[]
+  config?: Partial<WTConfig>
+}
+
+async function createTempRepo(options: TempRepoOptions): Promise<TempRepo>
+```
 
 ## Phase 6: GitHub CLI Integration (2 hours)
 
@@ -289,21 +449,85 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 
 ## Testing Strategy per Phase
 
-Each phase includes specific manual testing steps:
+Each phase includes comprehensive testing requirements:
 
-1. **Immediate Testing**: Run provided test commands after each phase
-2. **Integration Testing**: Verify new features work with existing functionality  
-3. **Edge Case Testing**: Test error conditions and boundary cases
-4. **Performance Testing**: Ensure responsive performance on typical repositories
+### Testing Requirements for Every Phase
+
+1. **Unit Tests (Full Coverage Goal)**:
+   - Write unit tests immediately after implementing each task
+   - Aim for 100% coverage where practically possible
+   - Mock all external dependencies (git, file system, network)
+   - Test all error conditions and edge cases
+   - Validate all exit codes and error messages
+
+2. **Integration Tests (Common Scenarios)**:
+   - Test main user workflows end-to-end
+   - Focus on most commonly used features
+   - Use real git operations and file system
+   - Test with various repository structures
+   - Validate user experience and error handling
+
+3. **Quality Gates**:
+   - **No advancing to next phase** until current phase tests pass
+   - Run `bun run test` and ensure all tests pass
+   - Run `bun run type-check` and fix all TypeScript errors
+   - Run `bun run lint` and fix all linting issues
+   - Verify manual test commands work as expected
+
+### Testing Commands for Each Phase
+
+**After every phase implementation**:
+```bash
+# Run all tests and quality checks
+bun run test                    # All tests must pass
+bun run test:unit              # Unit tests with coverage
+bun run test:integration       # Integration tests 
+bun run type-check             # No TypeScript errors
+bun run lint                   # No linting errors
+```
+
+**Coverage Requirements**:
+- **Unit Tests**: Target 100% coverage for new code
+- **Integration Tests**: Cover all main user workflows
+- **Error Handling**: Test every error path and exit code
+
+### Phase-Specific Testing Focus
+
+Each phase adds specific testing requirements:
+
+- **Phase 1-2**: Foundation testing (CLI, config, repository detection)
+- **Phase 3**: Core worktree operations testing
+- **Phase 4**: User interaction and fuzzy finding testing
+- **Phase 5**: Testing infrastructure itself
+- **Phase 6+**: Advanced features with backward compatibility testing
+
+**Test Organization**:
+```
+tests/
+├── unit/
+│   ├── cli/              # CLI parsing and dispatch
+│   ├── config/           # Configuration management
+│   ├── repository/       # Repository detection
+│   ├── worktree/         # Worktree operations
+│   └── utils/            # Utility functions
+├── integration/
+│   ├── workflows/        # End-to-end user workflows
+│   ├── commands/         # Individual command testing
+│   └── scenarios/        # Complex multi-step scenarios
+└── fixtures/             # Test data and repositories
+```
 
 ## Success Criteria
 
 Each phase is considered complete when:
 - All listed tasks are implemented
 - Manual test commands pass successfully
+- **All unit tests pass with target coverage**
+- **All integration tests pass for implemented features**
 - Code passes type checking (`bun run type-check`)
-- Unit tests pass (where applicable)
+- Code passes linting (`bun run lint`)
 - No obvious bugs or edge case failures
+- **Quality gates prevent advancing to next phase until all tests pass**
 
 ## Estimated Total Time: 12-15 hours
 
