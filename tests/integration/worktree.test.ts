@@ -4,11 +4,12 @@ import { join } from 'path';
 import { spawn } from 'child_process';
 import { tmpdir } from 'os';
 
+const wtBinaryPath = join(process.cwd(), 'wt');
+
 // Helper function to run wt command
 async function runWT(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve) => {
-    const wtPath = join(process.cwd(), 'src', 'index.ts');
-    const child = spawn('bun', ['run', wtPath, ...args], {
+  return new Promise((resolve, reject) => {
+    const child = spawn(wtBinaryPath, args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env }
@@ -16,6 +17,12 @@ async function runWT(args: string[], cwd: string): Promise<{ stdout: string; std
 
     let stdout = '';
     let stderr = '';
+
+    // Set a timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('Test command timed out after 10 seconds'));
+    }, 10000);
 
     child.stdout?.on('data', (data) => {
       stdout += data.toString();
@@ -26,11 +33,17 @@ async function runWT(args: string[], cwd: string): Promise<{ stdout: string; std
     });
 
     child.on('close', (code) => {
+      clearTimeout(timeout);
       resolve({
         stdout: stdout.trim(),
         stderr: stderr.trim(),
         exitCode: code || 0
       });
+    });
+
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
     });
   });
 }
@@ -45,16 +58,29 @@ async function runGit(args: string[], cwd: string): Promise<void> {
     });
 
     let stderr = '';
+
+    // Set a timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('Git command timed out after 10 seconds'));
+    }, 10000);
+
     child.stderr?.on('data', (data) => {
       stderr += data.toString();
     });
 
     child.on('close', (code) => {
+      clearTimeout(timeout);
       if (code === 0) {
         resolve();
       } else {
         reject(new Error(`Git command failed: ${stderr}`));
       }
+    });
+
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
     });
   });
 }

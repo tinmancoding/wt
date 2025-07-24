@@ -17,6 +17,7 @@ const mockRepoInfo: RepositoryInfo = {
 };
 
 describe('Configuration System', () => {
+
   describe('DEFAULT_CONFIG', () => {
     test('should have expected default values', () => {
       expect(DEFAULT_CONFIG).toEqual({

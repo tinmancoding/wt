@@ -1,0 +1,4 @@
+[test]
+# Force exit after tests complete to prevent hanging
+forceExit = true
+timeout = "30s"
