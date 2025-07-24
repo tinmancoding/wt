@@ -20,6 +20,13 @@ devbox run bun run build               # Production build (creates ./wt binary)
 - **TypeScript**: Strict mode enabled, use explicit types, avoid `any`
 - **Imports**: Use `.ts` extensions, path aliases `@/*` for src/, relative imports within modules
 - **Error Handling**: Use custom error classes with exit codes (see EXIT_CODES in cli/types.ts)
-- **Testing**: Bun test syntax `import { test, expect } from "bun:test"`, mock external dependencies
+- **Testing**: Bun test syntax `import { test, expect } from "bun:test"`, mock external dependencies in unit tests, integration tests with real command calling
 - **Naming**: camelCase for variables/functions, PascalCase for classes/types, kebab-case for files
 - **Structure**: Export types and main functionality from index.ts files in each module
+
+## Tools
+- If the Context7 MCP is available, please use it to get the proper API for bun and other TypeScript libraries.
+
+## Behaviour
+- For feature implementation: Don't move to the next task until all the linting errors are fixed and all the tests are passing. 
+
