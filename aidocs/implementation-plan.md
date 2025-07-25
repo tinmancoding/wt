@@ -280,13 +280,13 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
 **Manual Test**: Run test suite and verify coverage
 
 **Tasks**:
-- [ ] Set up Bun test runner configuration with coverage reporting
-- [ ] Create comprehensive mock interfaces for git commands
-- [ ] Create mock interfaces for file system operations
-- [ ] Add tests for repository detection (full coverage)
-- [ ] Add tests for configuration management (full coverage)
-- [ ] Add tests for branch resolution logic (full coverage)
-- [ ] Implement test utilities for common mocking patterns
+- [x] Set up Bun test runner configuration with coverage reporting
+- [x] Create comprehensive mock interfaces for git commands
+- [x] Create mock interfaces for file system operations
+- [x] Add tests for repository detection (full coverage)
+- [x] Add tests for configuration management (full coverage)
+- [x] Add tests for branch resolution logic (full coverage)
+- [x] Implement test utilities for common mocking patterns
 
 **Test Command**: `bun test unit/ --coverage`
 
@@ -320,12 +320,12 @@ interface FileSystemMock {
 **Manual Test**: Run integration tests with temporary repositories
 
 **Tasks**:
-- [ ] Create temporary repository utilities with cleanup
-- [ ] Add test fixtures for various repository scenarios
-- [ ] Implement common workflow testing patterns
-- [ ] Add cleanup mechanisms for test repositories
-- [ ] Create integration test suite for main user workflows
-- [ ] Set up CI-compatible test environment
+- [x] Create temporary repository utilities with cleanup
+- [x] Add test fixtures for various repository scenarios
+- [x] Implement common workflow testing patterns
+- [x] Add cleanup mechanisms for test repositories
+- [x] Create integration test suite for main user workflows
+- [x] Set up CI-compatible test environment
 
 **Test Command**: `bun test integration/`
 
