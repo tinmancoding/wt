@@ -15,6 +15,7 @@ import {
 import { EXIT_CODES, ExitCodeError } from '../cli/types.ts';
 import { basename } from 'path';
 import type { SupportedShell } from '../shell.ts';
+import { initializeRepository, RepositoryInitError, NetworkError } from '../init.ts';
 
 /**
  * List command - lists all worktrees
@@ -535,6 +536,51 @@ export const runCommand: Command = {
       // Use specific exit code for repository errors
       if (error instanceof RepositoryError) {
         process.exit(EXIT_CODES.GIT_REPO_NOT_FOUND);
+      } else {
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
+    }
+  }
+};
+/**
+ * Init command - initializes a new repository with bare setup for worktrees
+ */
+export const initCommand: Command = {
+  name: 'init',
+  description: 'Initialize a new repository with bare setup for worktrees',
+  args: [
+    {
+      name: 'git-url',
+      description: 'Git repository URL to clone',
+      required: true
+    },
+    {
+      name: 'name',
+      description: 'Target directory name (optional, defaults to repository name)',
+      required: false
+    }
+  ],
+  handler: async ({ positional }) => {
+    try {
+      const [gitUrl, targetName] = positional;
+      
+      if (!gitUrl) {
+        console.error('Error: Git repository URL is required');
+        process.exit(EXIT_CODES.INVALID_ARGUMENTS);
+      }
+      
+      // Initialize the repository
+      await initializeRepository(gitUrl, targetName);
+      
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error initializing repository: ${message}`);
+      
+      // Use specific exit codes for different error types
+      if (error instanceof NetworkError) {
+        process.exit(EXIT_CODES.NETWORK_ERROR);
+      } else if (error instanceof RepositoryInitError) {
+        process.exit(error.code);
       } else {
         process.exit(EXIT_CODES.GENERAL_ERROR);
       }

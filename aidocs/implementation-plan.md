@@ -421,13 +421,13 @@ async function createTempRepo(options: TempRepoOptions): Promise<TempRepo>
 **Manual Test**: Initialize new repository and verify structure
 
 **Tasks**:
-- [ ] Implement URL validation and parsing
-- [ ] Clone repository as bare into `.bare/` directory
-- [ ] Create `.git` file with proper gitdir reference
-- [ ] Configure remote fetch refspec for worktrees
-- [ ] Perform initial fetch of all remote branches
-- [ ] Add network error handling
-- [ ] Implement `wt init <git-url> [name]` command
+- [x] Implement URL validation and parsing
+- [x] Clone repository as bare into `.bare/` directory
+- [x] Create `.git` file with proper gitdir reference
+- [x] Configure remote fetch refspec for worktrees
+- [x] Perform initial fetch of all remote branches
+- [x] Add network error handling
+- [x] Implement `wt init <git-url> [name]` command
 
 **Test Command**: `wt init https://github.com/example/repo.git test-repo`
 
