@@ -2,6 +2,7 @@ import type { CLIConfig, Command, CommandContext } from './types.ts';
 import { EXIT_CODES } from './types.ts';
 import { ArgumentParser } from './parser.ts';
 import { HelpSystem } from './help.ts';
+import type { LoggerService } from '../services/types.ts';
 
 /**
  * Main CLI class that handles command registration and execution
@@ -11,7 +12,10 @@ export class CLI {
   private parser = new ArgumentParser();
   private help: HelpSystem;
 
-  constructor(private config: CLIConfig) {
+  constructor(
+    private config: CLIConfig, 
+    private logger: LoggerService
+  ) {
     this.help = new HelpSystem(config);
   }
 
@@ -40,7 +44,7 @@ export class CLI {
 
       // Handle global flags first - these take priority over everything
       if (this.parser.isVersionRequested(parsed.flags)) {
-        console.log(this.help.generateVersion());
+        this.logger.log(this.help.generateVersion());
         process.exit(EXIT_CODES.SUCCESS);
       }
 
@@ -48,13 +52,13 @@ export class CLI {
         if (parsed.command) {
           const command = this.commands.get(parsed.command);
           if (command) {
-            console.log(this.help.generateCommandHelp(command));
+            this.logger.log(this.help.generateCommandHelp(command));
           } else {
-            console.error(`Unknown command: ${parsed.command}`);
+            this.logger.error(`Unknown command: ${parsed.command}`);
             process.exit(EXIT_CODES.INVALID_ARGUMENTS);
           }
         } else {
-          console.log(this.help.generateMainHelp(Array.from(new Set(this.commands.values()))));
+          this.logger.log(this.help.generateMainHelp(Array.from(new Set(this.commands.values()))));
         }
         process.exit(EXIT_CODES.SUCCESS);
       }
@@ -62,15 +66,15 @@ export class CLI {
       // If no command specified and no version/help requested
       if (!parsed.command) {
         // Show help
-        console.log(this.help.generateMainHelp(Array.from(new Set(this.commands.values()))));
+        this.logger.log(this.help.generateMainHelp(Array.from(new Set(this.commands.values()))));
         process.exit(EXIT_CODES.SUCCESS);
       }
 
       // Find and execute command
       const command = this.commands.get(parsed.command);
       if (!command) {
-        console.error(`Unknown command: ${parsed.command}`);
-        console.error(`Run '${this.config.name} --help' for available commands.`);
+        this.logger.error(`Unknown command: ${parsed.command}`);
+        this.logger.error(`Run '${this.config.name} --help' for available commands.`);
         process.exit(EXIT_CODES.INVALID_ARGUMENTS);
       }
 
@@ -100,7 +104,7 @@ export class CLI {
     }
     
     if (error instanceof Error) {
-      console.error(`Error: ${error.message}`);
+      this.logger.error(`Error: ${error.message}`);
       
       // Map specific error types to exit codes
       if (error.message.includes('repository not found') || error.message.includes('not a git repository')) {
@@ -113,7 +117,7 @@ export class CLI {
         process.exit(EXIT_CODES.GENERAL_ERROR);
       }
     } else {
-      console.error('An unknown error occurred');
+      this.logger.error('An unknown error occurred');
       process.exit(EXIT_CODES.GENERAL_ERROR);
     }
   }

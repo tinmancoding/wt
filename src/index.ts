@@ -7,33 +7,44 @@
 
 import { CLI } from './cli/index.ts';
 import { version } from '../package.json';
-import { listCommand, createCommand, configCommand, removeCommand, printDirCommand, setupCommand, runCommand, initCommand } from './commands/index.ts';
+import { createCommands } from './commands/index.ts';
+import { createServiceContainer } from './services/container.ts';
+import { EXIT_CODES } from './cli/types.ts';
 
-const cli = new CLI({
-  name: 'wt',
-  version,
-  description: 'Git Worktree Manager - Enhanced CLI tool for managing Git worktrees'
-});
+async function main(): Promise<void> {
+  try {
+    // Create service container with default implementations
+    const services = createServiceContainer();
+    
+    // Create commands with service injection
+    const commands = createCommands(services);
+    
+    // Create CLI with logger service
+    const cli = new CLI({
+      name: 'wt',
+      version,
+      description: 'Git Worktree Manager - Enhanced CLI tool for managing Git worktrees'
+    }, services.logger);
 
-// Register commands
-cli.command(listCommand);
-cli.command(createCommand);
-cli.command(configCommand);
-cli.command(removeCommand);
-cli.command(printDirCommand);
-cli.command(setupCommand);
-cli.command(runCommand);
-cli.command(initCommand);
+    // Register all commands
+    for (const command of commands) {
+      cli.command(command);
+    }
 
-try {
-  await cli.run(process.argv.slice(2));
-} catch (error) {
-  // Handle special ExitCodeError for command-specific exit codes
-  if (error instanceof Error && error.name === 'ExitCodeError') {
-    const exitCodeError = error as any;
-    process.exit(exitCodeError.exitCode);
+    // Run CLI with arguments
+    await cli.run(process.argv.slice(2));
+  } catch (error) {
+    // Handle special ExitCodeError for command-specific exit codes
+    if (error instanceof Error && error.name === 'ExitCodeError') {
+      const exitCodeError = error as any;
+      process.exit(exitCodeError.exitCode);
+    }
+    
+    // Use console.error here as last resort since services may not be available
+    console.error(error instanceof Error ? error.message : 'An unknown error occurred');
+    process.exit(EXIT_CODES.GENERAL_ERROR);
   }
-  
-  console.error(error instanceof Error ? error.message : 'An unknown error occurred');
-  process.exit(1);
 }
+
+// Run the main function
+await main();
