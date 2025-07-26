@@ -7,7 +7,7 @@
 
 import { CLI } from './cli/index.ts';
 import { version } from '../package.json';
-import { listCommand, createCommand, configCommand, removeCommand, printDirCommand, setupCommand } from './commands/index.ts';
+import { listCommand, createCommand, configCommand, removeCommand, printDirCommand, setupCommand, runCommand } from './commands/index.ts';
 
 const cli = new CLI({
   name: 'wt',
@@ -22,10 +22,17 @@ cli.command(configCommand);
 cli.command(removeCommand);
 cli.command(printDirCommand);
 cli.command(setupCommand);
+cli.command(runCommand);
 
 try {
   await cli.run(process.argv.slice(2));
 } catch (error) {
+  // Handle special ExitCodeError for command-specific exit codes
+  if (error instanceof Error && error.name === 'ExitCodeError') {
+    const exitCodeError = error as any;
+    process.exit(exitCodeError.exitCode);
+  }
+  
   console.error(error instanceof Error ? error.message : 'An unknown error occurred');
   process.exit(1);
 }

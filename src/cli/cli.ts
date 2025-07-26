@@ -93,6 +93,12 @@ export class CLI {
    * Handle errors with appropriate exit codes
    */
   private handleError(error: unknown): void {
+    // Handle special ExitCodeError for command-specific exit codes
+    if (error instanceof Error && error.name === 'ExitCodeError') {
+      const exitCodeError = error as any;
+      process.exit(exitCodeError.exitCode);
+    }
+    
     if (error instanceof Error) {
       console.error(`Error: ${error.message}`);
       

@@ -36,6 +36,7 @@ export class HelpSystem {
       `  ${this.config.name} create feature-branch      # Create worktree for feature-branch`,
       `  ${this.config.name} print-dir feat             # Print path of worktree matching "feat"`,  
       `  ${this.config.name} list                       # List all worktrees`,
+      `  ${this.config.name} run main "npm test"        # Run npm test in main worktree`,
       `  ${this.config.name} --help                     # Show this help`,
       '',
       `Run '${this.config.name} <command> --help' for more information on a command.`

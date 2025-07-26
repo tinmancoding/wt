@@ -405,12 +405,12 @@ async function createTempRepo(options: TempRepoOptions): Promise<TempRepo>
 **Manual Test**: Run various commands in worktree context
 
 **Tasks**:
-- [ ] Implement process spawning with proper signal handling
-- [ ] Preserve command exit codes and output
-- [ ] Handle environment variable inheritance
-- [ ] Manage working directory context
-- [ ] Integrate with worktree creation logic
-- [ ] Implement `wt run <branch> <command...>` command
+- [x] Implement process spawning with proper signal handling
+- [x] Preserve command exit codes and output
+- [x] Handle environment variable inheritance
+- [x] Manage working directory context
+- [x] Integrate with worktree creation logic
+- [x] Implement `wt run <branch> <command...>` command
 
 **Test Command**: `wt run feature-branch "npm test"` or `wt run main "ls -la"`
 

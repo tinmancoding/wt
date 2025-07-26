@@ -53,3 +53,13 @@ export const EXIT_CODES = {
 } as const;
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
+
+/**
+ * Special error class for exiting with specific exit codes
+ */
+export class ExitCodeError extends Error {
+  constructor(public readonly exitCode: number, message?: string) {
+    super(message || `Process should exit with code ${exitCode}`);
+    this.name = 'ExitCodeError';
+  }
+}

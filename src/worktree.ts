@@ -1,5 +1,5 @@
 import { resolve, relative, basename, join } from 'path';
-import { executeGitCommand, executeGitCommandWithResult } from './git.ts';
+import { executeGitCommand, executeGitCommandWithResult, executeCommand, type CommandResult } from './git.ts';
 import type { RepositoryInfo } from './repository.ts';
 import type { WTConfig } from './config.ts';
 
@@ -447,4 +447,39 @@ export function promptConfirmation(message: string): Promise<boolean> {
     
     stdin.on('data', onData);
   });
+}
+
+/**
+ * Runs a command in a worktree directory, creating the worktree if it doesn't exist
+ */
+export async function runCommandInWorktree(
+  repoInfo: RepositoryInfo,
+  config: WTConfig,
+  branchName: string,
+  command: string,
+  args: string[]
+): Promise<CommandResult> {
+  // First, check if worktree already exists
+  const worktrees = await listWorktrees(repoInfo);
+  const existingWorktree = worktrees.find(wt => wt.branch === branchName);
+  
+  let worktreePath: string;
+  
+  if (existingWorktree) {
+    worktreePath = existingWorktree.path;
+    console.log(`Using existing worktree for branch '${branchName}' at ${worktreePath}`);
+  } else {
+    // Create the worktree
+    console.log(`Creating worktree for branch '${branchName}'...`);
+    await createWorktreeWithBranch(repoInfo, config, branchName);
+    
+    // Get the newly created worktree path
+    const worktreeBasePath = resolve(repoInfo.rootDir, config.worktreeDir);
+    worktreePath = join(worktreeBasePath, branchName);
+  }
+  
+  console.log(`Executing command in worktree: ${command} ${args.join(' ')}`);
+  
+  // Execute the command in the worktree directory with stdio inheritance for interactive commands
+  return executeCommand(command, args, worktreePath, true);
 }

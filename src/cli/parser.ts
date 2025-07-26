@@ -33,6 +33,20 @@ export class ArgumentParser {
         continue;
       }
       
+      // Handle -- separator (everything after is positional)
+      if (arg === '--') {
+        i++; // Skip the -- itself
+        // Add all remaining arguments as positional
+        while (i < args.length) {
+          const remainingArg = args[i];
+          if (remainingArg) {
+            result.positional.push(remainingArg);
+          }
+          i++;
+        }
+        break;
+      }
+      
       if (arg.startsWith('--')) {
         // Long flag (--flag=value or --flag value)
         const flagName = arg.slice(2);

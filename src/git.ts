@@ -166,3 +166,81 @@ export async function getGitVersion(): Promise<string> {
     throw new GitError('Failed to get git version', String(error), -1);
   }
 }
+
+/**
+ * Result of executing a shell command
+ */
+export interface CommandResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * Executes a shell command in a specific working directory with proper signal handling
+ * @param command The command to execute
+ * @param args Array of arguments to pass to the command
+ * @param workDir The working directory to execute command in
+ * @param inheritStdio Whether to inherit stdio (for interactive commands)
+ * @returns Promise that resolves to CommandResult
+ */
+export async function executeCommand(
+  command: string,
+  args: string[],
+  workDir: string,
+  inheritStdio = false
+): Promise<CommandResult> {
+  return new Promise((resolve) => {
+    const childProcess = spawn(command, args, {
+      cwd: workDir,
+      env: { ...process.env },
+      stdio: inheritStdio ? 'inherit' : ['inherit', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    // Only collect output if not inheriting stdio
+    if (!inheritStdio) {
+      childProcess.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      childProcess.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+    }
+
+    // Forward signals to child process for proper handling
+    const signalHandler = (signal: NodeJS.Signals) => {
+      childProcess.kill(signal);
+    };
+
+    process.on('SIGINT', signalHandler);
+    process.on('SIGTERM', signalHandler);
+
+    childProcess.on('close', (code: number | null) => {
+      // Clean up signal handlers
+      process.off('SIGINT', signalHandler);
+      process.off('SIGTERM', signalHandler);
+
+      resolve({
+        exitCode: code ?? -1,
+        stdout,
+        stderr
+      });
+    });
+
+    childProcess.on('error', (error: Error) => {
+      // Clean up signal handlers
+      process.off('SIGINT', signalHandler);
+      process.off('SIGTERM', signalHandler);
+
+      resolve({
+        exitCode: -1,
+        stdout,
+        stderr: `Process error: ${error.message}`
+      });
+    });
+  });
+}

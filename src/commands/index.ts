@@ -9,9 +9,10 @@ import {
   findWorktreesByPattern,
   removeWorktree,
   deleteBranch,
-  promptConfirmation
+  promptConfirmation,
+  runCommandInWorktree
 } from '../worktree.ts';
-import { EXIT_CODES } from '../cli/types.ts';
+import { EXIT_CODES, ExitCodeError } from '../cli/types.ts';
 import { basename } from 'path';
 import type { SupportedShell } from '../shell.ts';
 
@@ -475,6 +476,68 @@ export const setupCommand: Command = {
       const message = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error(`Error generating shell wrapper: ${message}`);
       process.exit(EXIT_CODES.GENERAL_ERROR);
+    }
+  }
+};
+
+/**
+ * Run command - creates worktree and executes command in it
+ */
+export const runCommand: Command = {
+  name: 'run',
+  description: 'Create worktree (if needed) and run command in it',
+  args: [
+    {
+      name: 'branch',
+      description: 'Branch name to create worktree for',
+      required: true
+    },
+    {
+      name: 'command',
+      description: 'Command to execute in the worktree',
+      required: true
+    }
+  ],
+  handler: async ({ positional }) => {
+    try {
+      const [branch, command, ...commandArgs] = positional;
+      
+      if (!branch) {
+        console.error('Error: Branch name is required');
+        process.exit(EXIT_CODES.INVALID_ARGUMENTS);
+      }
+      
+      if (!command) {
+        console.error('Error: Command is required');
+        process.exit(EXIT_CODES.INVALID_ARGUMENTS);
+      }
+      
+      const repoInfo = await detectRepository();
+      const config = await loadConfig(repoInfo);
+      
+      // Run command in worktree (creates worktree if it doesn't exist)
+      const result = await runCommandInWorktree(repoInfo, config, branch, command, commandArgs);
+      
+      // Exit with the same code as the executed command
+      if (result.exitCode !== 0) {
+        throw new ExitCodeError(result.exitCode);
+      }
+      
+    } catch (error) {
+      // Re-throw ExitCodeError to let CLI handle it
+      if (error instanceof Error && error.name === 'ExitCodeError') {
+        throw error;
+      }
+      
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error running command: ${message}`);
+      
+      // Use specific exit code for repository errors
+      if (error instanceof RepositoryError) {
+        process.exit(EXIT_CODES.GIT_REPO_NOT_FOUND);
+      } else {
+        process.exit(EXIT_CODES.GENERAL_ERROR);
+      }
     }
   }
 };
