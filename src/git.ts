@@ -2,8 +2,10 @@
  * Git command utilities and helpers
  */
 
-import { spawn } from 'node:child_process';
 import { EXIT_CODES } from './cli/types.ts';
+import type { GitService, LoggerService } from './services/types.ts';
+import { NodeGitService } from './services/implementations/NodeGitService.ts';
+import { NodeCommandService } from './services/implementations/NodeCommandService.ts';
 
 export interface GitCommandResult {
   stdout: string;
@@ -31,17 +33,8 @@ export class GitError extends Error {
  * @throws GitError if the command fails
  */
 export async function executeGitCommand(gitDir: string, args: string[]): Promise<string> {
-  const result = await executeGitCommandWithResult(gitDir, args);
-  
-  if (result.exitCode !== 0) {
-    throw new GitError(
-      `Git command failed: ${result.stderr.trim() || 'Unknown error'}`,
-      result.stderr,
-      result.exitCode
-    );
-  }
-  
-  return result.stdout.trim();
+  const defaultGit = new NodeGitService();
+  return defaultGit.executeCommand(gitDir, args);
 }
 
 /**
@@ -51,39 +44,8 @@ export async function executeGitCommand(gitDir: string, args: string[]): Promise
  * @returns Promise that resolves to GitCommandResult
  */
 export async function executeGitCommandWithResult(gitDir: string, args: string[]): Promise<GitCommandResult> {
-  return new Promise((resolve) => {
-    const childProcess = spawn('git', ['--git-dir', gitDir, ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env } // Explicitly pass environment
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    childProcess.stdout?.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    childProcess.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    childProcess.on('close', (code: number | null) => {
-      resolve({
-        stdout,
-        stderr,
-        exitCode: code ?? -1
-      });
-    });
-
-    childProcess.on('error', (error: Error) => {
-      resolve({
-        stdout,
-        stderr: `Process error: ${error.message}`,
-        exitCode: -1
-      });
-    });
-  });
+  const defaultGit = new NodeGitService();
+  return defaultGit.executeCommandWithResult(gitDir, args);
 }
 
 /**
@@ -94,44 +56,8 @@ export async function executeGitCommandWithResult(gitDir: string, args: string[]
  * @throws GitError if the command fails
  */
 export async function executeGitCommandInDir(workDir: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const childProcess = spawn('git', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      cwd: workDir,
-      env: { ...process.env }
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    childProcess.stdout?.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    childProcess.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    childProcess.on('close', (code: number | null) => {
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        reject(new GitError(
-          `Git command failed: ${stderr.trim() || 'Unknown error'}`,
-          stderr,
-          code ?? -1
-        ));
-      }
-    });
-
-    childProcess.on('error', (error: Error) => {
-      reject(new GitError(
-        `Process error: ${error.message}`,
-        error.message,
-        -1
-      ));
-    });
-  });
+  const defaultGit = new NodeGitService();
+  return defaultGit.executeCommandInDir(workDir, args);
 }
 
 /**
@@ -139,12 +65,8 @@ export async function executeGitCommandInDir(workDir: string, args: string[]): P
  * @returns Promise that resolves to true if git is available
  */
 export async function isGitAvailable(): Promise<boolean> {
-  try {
-    const result = await executeGitCommandWithResult('.', ['--version']);
-    return result.exitCode === 0;
-  } catch {
-    return false;
-  }
+  const defaultGit = new NodeGitService();
+  return defaultGit.isAvailable();
 }
 
 /**
@@ -153,17 +75,66 @@ export async function isGitAvailable(): Promise<boolean> {
  * @throws GitError if git is not available
  */
 export async function getGitVersion(): Promise<string> {
-  try {
-    const result = await executeGitCommandWithResult('.', ['--version']);
-    if (result.exitCode !== 0) {
-      throw new GitError('Git is not available', result.stderr, result.exitCode);
-    }
-    return result.stdout.trim();
-  } catch (error) {
-    if (error instanceof GitError) {
+  const defaultGit = new NodeGitService();
+  return defaultGit.getVersion();
+}
+
+/**
+ * Service-based git operations class for dependency injection
+ */
+export class GitOperations {
+  constructor(
+    private git: GitService,
+    private logger: LoggerService
+  ) {}
+
+  async executeCommand(gitDir: string, args: string[]): Promise<string> {
+    try {
+      return await this.git.executeCommand(gitDir, args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Git command failed: ${message}`);
       throw error;
     }
-    throw new GitError('Failed to get git version', String(error), -1);
+  }
+
+  async executeCommandWithResult(gitDir: string, args: string[]): Promise<GitCommandResult> {
+    try {
+      return await this.git.executeCommandWithResult(gitDir, args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Git command failed: ${message}`);
+      throw error;
+    }
+  }
+
+  async executeCommandInDir(workDir: string, args: string[]): Promise<string> {
+    try {
+      return await this.git.executeCommandInDir(workDir, args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Git command failed: ${message}`);
+      throw error;
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      return await this.git.isAvailable();
+    } catch (error) {
+      this.logger.debug(`Git availability check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false;
+    }
+  }
+
+  async getVersion(): Promise<string> {
+    try {
+      return await this.git.getVersion();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Git version check failed: ${message}`);
+      throw error;
+    }
   }
 }
 
@@ -190,57 +161,6 @@ export async function executeCommand(
   workDir: string,
   inheritStdio = false
 ): Promise<CommandResult> {
-  return new Promise((resolve) => {
-    const childProcess = spawn(command, args, {
-      cwd: workDir,
-      env: { ...process.env },
-      stdio: inheritStdio ? 'inherit' : ['inherit', 'pipe', 'pipe']
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    // Only collect output if not inheriting stdio
-    if (!inheritStdio) {
-      childProcess.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      childProcess.stderr?.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-    }
-
-    // Forward signals to child process for proper handling
-    const signalHandler = (signal: NodeJS.Signals) => {
-      childProcess.kill(signal);
-    };
-
-    process.on('SIGINT', signalHandler);
-    process.on('SIGTERM', signalHandler);
-
-    childProcess.on('close', (code: number | null) => {
-      // Clean up signal handlers
-      process.off('SIGINT', signalHandler);
-      process.off('SIGTERM', signalHandler);
-
-      resolve({
-        exitCode: code ?? -1,
-        stdout,
-        stderr
-      });
-    });
-
-    childProcess.on('error', (error: Error) => {
-      // Clean up signal handlers
-      process.off('SIGINT', signalHandler);
-      process.off('SIGTERM', signalHandler);
-
-      resolve({
-        exitCode: -1,
-        stdout,
-        stderr: `Process error: ${error.message}`
-      });
-    });
-  });
+  const defaultCmd = new NodeCommandService();
+  return defaultCmd.execute(command, args, workDir, inheritStdio);
 }

@@ -3,10 +3,11 @@
  */
 
 import { resolve, join, basename } from 'path';
-import { writeFile, mkdir } from 'fs/promises';
-import { executeGitCommandInDir, GitError } from './git.ts';
+import { GitError } from './git.ts';
 import { EXIT_CODES } from './cli/types.ts';
 import type { RepositoryInfo } from './repository.ts';
+import type { ServiceContainer } from './services/types.ts';
+import { createServiceContainer } from './services/container.ts';
 
 export class RepositoryInitError extends Error {
   constructor(message: string, public readonly code: number = EXIT_CODES.GENERAL_ERROR) {
@@ -95,136 +96,137 @@ export function validateAndParseGitUrl(url: string): { url: string; name: string
  * Initializes a new repository with bare setup for worktrees
  */
 export async function initializeRepository(gitUrl: string, targetName?: string): Promise<RepositoryInfo> {
-  const { url, name: defaultName } = validateAndParseGitUrl(gitUrl);
-  
-  // Handle targetName validation explicitly
-  let repoName: string;
-  if (targetName !== undefined) {
-    const trimmedTarget = targetName.trim();
-    if (trimmedTarget === '') {
+  const defaultServices = createServiceContainer();
+  const initOps = new InitOperations(defaultServices);
+  return initOps.initializeRepository(gitUrl, targetName);
+}
+
+/**
+ * Service-based initialization operations class for dependency injection
+ */
+export class InitOperations {
+  constructor(private services: ServiceContainer) {}
+
+  async initializeRepository(gitUrl: string, targetName?: string): Promise<RepositoryInfo> {
+    const { url, name: defaultName } = validateAndParseGitUrl(gitUrl);
+    
+    // Handle targetName validation explicitly
+    let repoName: string;
+    if (targetName !== undefined) {
+      const trimmedTarget = targetName.trim();
+      if (trimmedTarget === '') {
+        throw new RepositoryInitError('Repository name cannot be empty', EXIT_CODES.INVALID_ARGUMENTS);
+      }
+      
+      // Validate targetName characters 
+      if (trimmedTarget.includes('/') || trimmedTarget.includes('\\') || trimmedTarget.includes('@')) {
+        throw new RepositoryInitError('Invalid repository name: contains invalid characters', EXIT_CODES.INVALID_ARGUMENTS);
+      }
+      
+      repoName = trimmedTarget;
+    } else {
+      repoName = defaultName;
+    }
+    
+    // Validate final name
+    if (!repoName) {
       throw new RepositoryInitError('Repository name cannot be empty', EXIT_CODES.INVALID_ARGUMENTS);
     }
-    
-    // Validate targetName characters 
-    if (trimmedTarget.includes('/') || trimmedTarget.includes('\\') || trimmedTarget.includes('@')) {
-      throw new RepositoryInitError('Invalid repository name: contains invalid characters', EXIT_CODES.INVALID_ARGUMENTS);
-    }
-    
-    repoName = trimmedTarget;
-  } else {
-    repoName = defaultName;
-  }
-  
-  // Validate final name
-  if (!repoName) {
-    throw new RepositoryInitError('Repository name cannot be empty', EXIT_CODES.INVALID_ARGUMENTS);
-  }
 
-  const targetDir = resolve(process.cwd(), repoName);
-  const bareDir = join(targetDir, '.bare');
-  const gitFile = join(targetDir, '.git');
+    const targetDir = resolve(process.cwd(), repoName);
+    const bareDir = join(targetDir, '.bare');
+    const gitFile = join(targetDir, '.git');
 
-  try {
-    // Create target directory
-    await mkdir(targetDir, { recursive: true });
-    
-    // Clone as bare repository
-    console.log(`Cloning ${url} as bare repository...`);
-    await cloneBareRepository(url, bareDir);
-    
-    // Create .git file pointing to bare repository
-    console.log('Setting up .git file...');
-    await createGitFile(gitFile, './.bare');
-    
-    // Configure remote for worktrees
-    console.log('Configuring remote for worktrees...');
-    await configureRemoteForWorktrees(bareDir);
-    
-    // Perform initial fetch
-    console.log('Fetching all remote branches...');
-    await fetchAllRemoteBranches(bareDir);
-    
-    console.log(`Repository initialized successfully in ${targetDir}`);
-    
-    return {
-      rootDir: targetDir,
-      gitDir: bareDir,
-      type: 'bare',
-      bareDir: bareDir
-    };
-    
-  } catch (error) {
-    if (error instanceof GitError) {
-      // Check if it's a network-related error
-      if (isNetworkError(error)) {
-        throw new NetworkError(`Network error while cloning repository: ${error.message}`);
+    try {
+      // Create target directory
+      await this.services.fs.mkdir(targetDir, { recursive: true });
+      
+      // Clone as bare repository
+      this.services.logger.log(`Cloning ${url} as bare repository...`);
+      await this.cloneBareRepository(url, bareDir);
+      
+      // Create .git file pointing to bare repository
+      this.services.logger.log('Setting up .git file...');
+      await this.createGitFile(gitFile, './.bare');
+      
+      // Configure remote for worktrees
+      this.services.logger.log('Configuring remote for worktrees...');
+      await this.configureRemoteForWorktrees(bareDir);
+      
+      // Perform initial fetch
+      this.services.logger.log('Fetching all remote branches...');
+      await this.fetchAllRemoteBranches(bareDir);
+      
+      this.services.logger.log(`Repository initialized successfully in ${targetDir}`);
+      
+      return {
+        rootDir: targetDir,
+        gitDir: bareDir,
+        type: 'bare',
+        bareDir: bareDir
+      };
+      
+    } catch (error) {
+      if (error instanceof GitError) {
+        // Check if it's a network-related error
+        if (isNetworkError(error)) {
+          throw new NetworkError(`Network error while cloning repository: ${error.message}`);
+        }
+        throw new RepositoryInitError(`Git error: ${error.message}`);
       }
-      throw new RepositoryInitError(`Git error: ${error.message}`);
+      
+      if (error instanceof RepositoryInitError) {
+        throw error;
+      }
+      
+      throw new RepositoryInitError(`Failed to initialize repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    if (error instanceof RepositoryInitError) {
-      throw error;
-    }
-    
-    throw new RepositoryInitError(`Failed to initialize repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}
 
-/**
- * Clones a repository as bare into the specified directory
- */
-async function cloneBareRepository(url: string, bareDir: string): Promise<void> {
-  try {
-    await executeGitCommandInDir(process.cwd(), ['clone', '--bare', url, bareDir]);
-  } catch (error) {
-    if (error instanceof GitError) {
-      throw error;
+  private async cloneBareRepository(url: string, bareDir: string): Promise<void> {
+    try {
+      await this.services.git.executeCommandInDir(process.cwd(), ['clone', '--bare', url, bareDir]);
+    } catch (error) {
+      if (error instanceof GitError) {
+        throw error;
+      }
+      throw new GitError(`Failed to clone repository: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
     }
-    throw new GitError(`Failed to clone repository: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
   }
-}
 
-/**
- * Creates a .git file pointing to the bare repository
- */
-async function createGitFile(gitFilePath: string, bareRelativePath: string): Promise<void> {
-  const content = `gitdir: ${bareRelativePath}\n`;
-  try {
-    await writeFile(gitFilePath, content, 'utf8');
-  } catch (error) {
-    throw new RepositoryInitError(
-      `Failed to create .git file: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      EXIT_CODES.FILESYSTEM_ERROR
-    );
-  }
-}
-
-/**
- * Configures the remote fetch refspec for worktree compatibility
- */
-async function configureRemoteForWorktrees(bareDir: string): Promise<void> {
-  try {
-    // Set the remote fetch refspec to fetch all branches
-    await executeGitCommandInDir(bareDir, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
-  } catch (error) {
-    if (error instanceof GitError) {
-      throw error;
+  private async createGitFile(gitFilePath: string, bareRelativePath: string): Promise<void> {
+    const content = `gitdir: ${bareRelativePath}\n`;
+    try {
+      await this.services.fs.writeFile(gitFilePath, content, 'utf8');
+    } catch (error) {
+      throw new RepositoryInitError(
+        `Failed to create .git file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        EXIT_CODES.FILESYSTEM_ERROR
+      );
     }
-    throw new GitError(`Failed to configure remote: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
   }
-}
 
-/**
- * Performs initial fetch of all remote branches
- */
-async function fetchAllRemoteBranches(bareDir: string): Promise<void> {
-  try {
-    await executeGitCommandInDir(bareDir, ['fetch', 'origin']);
-  } catch (error) {
-    if (error instanceof GitError) {
-      throw error;
+  private async configureRemoteForWorktrees(bareDir: string): Promise<void> {
+    try {
+      // Set the remote fetch refspec to fetch all branches
+      await this.services.git.executeCommandInDir(bareDir, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
+    } catch (error) {
+      if (error instanceof GitError) {
+        throw error;
+      }
+      throw new GitError(`Failed to configure remote: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
     }
-    throw new GitError(`Failed to fetch branches: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
+  }
+
+  private async fetchAllRemoteBranches(bareDir: string): Promise<void> {
+    try {
+      await this.services.git.executeCommandInDir(bareDir, ['fetch', 'origin']);
+    } catch (error) {
+      if (error instanceof GitError) {
+        throw error;
+      }
+      throw new GitError(`Failed to fetch branches: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
+    }
   }
 }
 

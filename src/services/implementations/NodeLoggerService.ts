@@ -22,6 +22,10 @@ export class NodeLoggerService implements LoggerService {
   }
 
   debug(message: string, ...args: any[]): void {
-    console.debug(message, ...args);
+    // Suppress debug output in production to avoid cluttering CLI output
+    // Enable with environment variable WT_DEBUG=1 if needed
+    if (process.env.WT_DEBUG === '1') {
+      console.debug(message, ...args);
+    }
   }
 }
