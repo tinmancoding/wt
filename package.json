@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build --compile --minify --sourcemap --target bun src/index.ts --outfile wt",
+    "install": "bun run build && mkdir -p ~/.local/bin && cp ./wt ~/.local/bin/wt && echo 'wt binary installed to ~/.local/bin/wt'",
     "test": "bun test",
     "test:unit": "bun test --bail tests/unit/",
     "test:integration": "bun test --bail tests/integration/",
