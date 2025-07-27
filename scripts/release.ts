@@ -2,7 +2,7 @@
 
 /**
  * Release Script
- * Updates package.json version and creates matching git tag
+ * Updates package.json version, commits the change, and creates matching git tag
  * 
  * Usage:
  *   bun run release                    # Auto-increment patch version
@@ -120,6 +120,27 @@ async function updatePackageJson(newVersion: string, dryRun: boolean): Promise<v
   }
 }
 
+async function commitPackageJsonChanges(version: string, dryRun: boolean): Promise<void> {
+  console.log(`📝 Committing package.json changes`);
+  
+  if (!dryRun) {
+    // Stage package.json
+    const { exitCode: addExitCode } = await executeCommand('git', ['add', 'package.json']);
+    if (addExitCode !== 0) {
+      throw new ReleaseError('Failed to stage package.json');
+    }
+    
+    // Commit the changes
+    const commitMessage = `chore: bump version to ${version}`;
+    const { exitCode: commitExitCode } = await executeCommand('git', ['commit', '-m', commitMessage]);
+    if (commitExitCode !== 0) {
+      throw new ReleaseError('Failed to commit package.json changes');
+    }
+    
+    console.log('✅ Committed package.json changes');
+  }
+}
+
 async function createGitTag(version: string, dryRun: boolean): Promise<void> {
   const tagName = `v${version}`;
   
@@ -157,7 +178,7 @@ async function getCurrentVersion(): Promise<string> {
 
 function showHelp(): void {
   console.log(`
-Release Script - Update package.json version and create git tag
+Release Script - Update package.json version, commit change, and create git tag
 
 Usage:
   bun run release [version|increment] [--dry-run]
@@ -245,6 +266,9 @@ async function main(): Promise<void> {
     // Update package.json
     await updatePackageJson(newVersion, dryRun);
     
+    // Commit package.json changes
+    await commitPackageJsonChanges(newVersion, dryRun);
+    
     // Create git tag
     await createGitTag(newVersion, dryRun);
     
@@ -256,8 +280,9 @@ async function main(): Promise<void> {
       console.log('🎉 Release completed successfully!');
       console.log('');
       console.log('Next steps:');
-      console.log('  1. Push the tag: git push origin v' + newVersion);
-      console.log('  2. This will trigger the GitHub release workflow');
+      console.log('  1. Push the commit: git push');
+      console.log('  2. Push the tag: git push origin v' + newVersion);
+      console.log('  3. This will trigger the GitHub release workflow');
     }
     
   } catch (error) {
