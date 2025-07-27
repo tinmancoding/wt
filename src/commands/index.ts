@@ -10,7 +10,8 @@ import {
   removeWorktree,
   deleteBranch,
   promptConfirmation,
-  runCommandInWorktree
+  runCommandInWorktree,
+  WorktreeOperations
 } from '../worktree.ts';
 import { EXIT_CODES, ExitCodeError } from '../cli/types.ts';
 import { basename } from 'path';
@@ -81,7 +82,8 @@ export function createCreateCommand(services: ServiceContainer): Command {
         const repoInfo = await detectRepository();
         const config = await loadConfig(repoInfo);
         
-        await createWorktreeWithBranch(repoInfo, config, branch);
+        const worktreeOps = new WorktreeOperations(services);
+        await worktreeOps.createWorktreeWithBranch(repoInfo, config, branch);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error occurred';
         services.logger.error(`Error creating worktree: ${message}`);
