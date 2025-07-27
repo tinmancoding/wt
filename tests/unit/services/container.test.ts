@@ -1,13 +1,13 @@
 import { test, expect } from 'bun:test';
-import { createServiceContainer, createTestServiceContainer } from '@/services/container.ts';
-import { NodeLoggerService } from '@/services/implementations/NodeLoggerService.ts';
-import { NodeGitService } from '@/services/implementations/NodeGitService.ts';
-import { NodeFileSystemService } from '@/services/implementations/NodeFileSystemService.ts';
-import { NodeCommandService } from '@/services/implementations/NodeCommandService.ts';
-import { MockLoggerService } from '@/services/test-implementations/MockLoggerService.ts';
-import { MockGitService } from '@/services/test-implementations/MockGitService.ts';
-import { MockFileSystemService } from '@/services/test-implementations/MockFileSystemService.ts';
-import { MockCommandService } from '@/services/test-implementations/MockCommandService.ts';
+import { createServiceContainer, createTestServiceContainer } from '../../../src/services/container.ts';
+import { NodeLoggerService } from '../../../src/services/implementations/NodeLoggerService.ts';
+import { NodeGitService } from '../../../src/services/implementations/NodeGitService.ts';
+import { NodeFileSystemService } from '../../../src/services/implementations/NodeFileSystemService.ts';
+import { NodeCommandService } from '../../../src/services/implementations/NodeCommandService.ts';
+import { MockLoggerService } from '../../../src/services/test-implementations/MockLoggerService.ts';
+import { MockGitService } from '../../../src/services/test-implementations/MockGitService.ts';
+import { MockFileSystemService } from '../../../src/services/test-implementations/MockFileSystemService.ts';
+import { MockCommandService } from '../../../src/services/test-implementations/MockCommandService.ts';
 
 
 test('createServiceContainer creates container with default implementations', () => {

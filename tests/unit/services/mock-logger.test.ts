@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { MockLoggerService } from '@/services/test-implementations/MockLoggerService.ts';
+import { MockLoggerService } from '../../../src/services/test-implementations/MockLoggerService.ts';
 
 test('MockLoggerService captures log messages', () => {
   const logger = new MockLoggerService();

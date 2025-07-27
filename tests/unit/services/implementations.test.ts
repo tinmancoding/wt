@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
-import { NodeLoggerService } from '@/services/implementations/NodeLoggerService.ts';
-import { NodeFileSystemService } from '@/services/implementations/NodeFileSystemService.ts';
-import { SilentLoggerService } from '@/services/test-implementations/SilentLoggerService.ts';
+import { NodeLoggerService } from '../../../src/services/implementations/NodeLoggerService.ts';
+import { NodeFileSystemService } from '../../../src/services/implementations/NodeFileSystemService.ts';
+import { SilentLoggerService } from '../../../src/services/test-implementations/SilentLoggerService.ts';
 
 test('NodeLoggerService implements LoggerService interface', () => {
   const logger = new NodeLoggerService();

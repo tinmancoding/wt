@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
-import { MockGitService } from '@/services/test-implementations/MockGitService.ts';
-import type { GitCommandResult } from '@/services/types.ts';
+import { MockGitService } from '../../../src/services/test-implementations/MockGitService.ts';
+import type { GitCommandResult } from '../../../src/services/types.ts';
 
 test('MockGitService executeCommand returns configured response', async () => {
   const mockGit = new MockGitService();
