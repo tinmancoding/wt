@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    name: Build Cross-Platform Binaries
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install devbox
+      uses: jetify-com/devbox-install-action@v0.12.0
+      with:
+        enable-cache: true
+        
+    - name: Run quality checks
+      run: |
+        devbox run lint
+        devbox run type-check
+        devbox run test
+        
+    - name: Create dist directory
+      run: mkdir -p dist
+      
+    - name: Build all platforms
+      run: devbox run build:all
+      
+    - name: Generate checksums
+      run: |
+        cd dist
+        sha256sum wt-* > checksums.txt
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries
+        path: |
+          dist/wt-*
+          dist/checksums.txt
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: binaries
+        path: dist/
+        
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          echo "prerelease=${{ github.event.inputs.prerelease }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "prerelease=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create release archives
+      run: |
+        cd dist
+        for binary in wt-linux-x64 wt-linux-arm64 wt-darwin-x64 wt-darwin-arm64; do
+          if [ -f "$binary" ]; then
+            if [[ "$binary" == *"darwin"* ]]; then
+              zip "${binary}.zip" "$binary"
+            else
+              tar -czf "${binary}.tar.gz" "$binary"
+            fi
+          fi
+        done
+        
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        echo "## What's Changed" > release_notes.md
+        echo "" >> release_notes.md
+        echo "### Binaries" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "| Platform | Architecture | Download |" >> release_notes.md
+        echo "|----------|-------------|----------|" >> release_notes.md
+        echo "| Linux | x64 | [wt-linux-x64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/wt-linux-x64.tar.gz) |" >> release_notes.md
+        echo "| Linux | ARM64 | [wt-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/wt-linux-arm64.tar.gz) |" >> release_notes.md
+        echo "| macOS | x64 (Intel) | [wt-darwin-x64.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/wt-darwin-x64.zip) |" >> release_notes.md
+        echo "| macOS | ARM64 (Apple Silicon) | [wt-darwin-arm64.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/wt-darwin-arm64.zip) |" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Installation" >> release_notes.md
+        echo "" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "# Quick install (latest version)" >> release_notes.md
+        echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Install specific version" >> release_notes.md
+        echo "WT_INSTALL_VERSION=${{ steps.version.outputs.version }} curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh" >> release_notes.md
+        echo '```' >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Verification" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "All binaries include SHA256 checksums for verification. Download [checksums.txt](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/checksums.txt) to verify your download." >> release_notes.md
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Release ${{ steps.version.outputs.version }}
+        body_path: release_notes.md
+        prerelease: ${{ steps.version.outputs.prerelease }}
+        files: |
+          dist/wt-*.tar.gz
+          dist/wt-*.zip
+          dist/checksums.txt
+        generate_release_notes: true

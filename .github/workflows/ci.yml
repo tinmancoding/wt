@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-checks:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install devbox
+      uses: jetify-com/devbox-install-action@v0.12.0
+      with:
+        enable-cache: true
+        
+    - name: Lint check
+      run: devbox run lint
+      
+    - name: Type check
+      run: devbox run type-check
+      
+    - name: Unit tests
+      run: devbox run test:unit
+      
+    - name: Integration tests
+      run: devbox run test:integration
+      
+    - name: Build verification
+      run: devbox run build
+
+  cross-platform-test:
+    name: Cross-Platform Integration Tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install devbox
+      uses: jetify-com/devbox-install-action@v0.12.0
+      with:
+        enable-cache: true
+        
+    - name: Integration tests
+      run: devbox run test:integration
