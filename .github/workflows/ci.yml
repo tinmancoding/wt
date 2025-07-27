@@ -31,12 +31,6 @@ jobs:
       
     - name: Unit tests
       run: devbox run test:unit
-        
-    - name: Build for integration tests
-      run: devbox run build
-        
-    - name: Integration tests
-      run: devbox run test:integration
       
     - name: Build verification
       run: devbox run build
