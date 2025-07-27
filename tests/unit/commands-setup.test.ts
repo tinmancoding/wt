@@ -3,7 +3,9 @@
  */
 
 import { test, expect, mock } from 'bun:test';
-import { setupCommand } from '../../src/commands/index.ts';
+import { createSetupCommand } from '../../src/commands/index.ts';
+import { createServiceContainer } from '../../src/services/container.ts';
+import { MockLoggerService } from '../../src/services/test-implementations/MockLoggerService.ts';
 
 // Mock shell module
 const mockDetectShell = mock(() => 'bash');
@@ -16,52 +18,45 @@ mock.module('../../src/shell.ts', () => ({
   getShellSetupInstructions: mockGetShellSetupInstructions
 }));
 
-// Mock console methods
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
+// Mock process.exit to prevent actual exits during tests
 const originalProcessExit = process.exit;
-
-let consoleLogOutput: string[] = [];
-let consoleErrorOutput: string[] = [];
 let exitCode: number | null = null;
 
-function setupMocks() {
-  consoleLogOutput = [];
-  consoleErrorOutput = [];
+function mockProcessExit() {
   exitCode = null;
-  
-  console.log = mock((message: string) => {
-    consoleLogOutput.push(message);
-  });
-  
-  console.error = mock((message: string) => {
-    consoleErrorOutput.push(message);
-  });
-  
   process.exit = mock((code?: number) => {
     exitCode = code ?? 0;
     throw new Error(`Process exit called with code ${exitCode}`);
   }) as any;
 }
 
-function restoreMocks() {
-  console.log = originalConsoleLog;
-  console.error = originalConsoleError;
+function restoreProcessExit() {
   process.exit = originalProcessExit;
-  
+}
+
+function setupMocks() {
   mockDetectShell.mockClear();
   mockGenerateShellWrapper.mockClear();
   mockGetShellSetupInstructions.mockClear();
+  mockProcessExit();
+}
+
+function restoreMocks() {
+  restoreProcessExit();
 }
 
 test('setupCommand - should generate bash wrapper when --bash flag is provided', async () => {
   setupMocks();
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { bash: true }, positional: [] });
     
     expect(mockGenerateShellWrapper).toHaveBeenCalledWith('bash');
-    expect(consoleLogOutput).toContain('mock shell wrapper');
+    expect(mockLogger.hasLog('log', 'mock shell wrapper')).toBe(true);
   } catch (error) {
     // Expected due to mocked process.exit
   }
@@ -72,11 +67,15 @@ test('setupCommand - should generate bash wrapper when --bash flag is provided',
 test('setupCommand - should generate zsh wrapper when --zsh flag is provided', async () => {
   setupMocks();
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { zsh: true }, positional: [] });
     
     expect(mockGenerateShellWrapper).toHaveBeenCalledWith('zsh');
-    expect(consoleLogOutput).toContain('mock shell wrapper');
+    expect(mockLogger.hasLog('log', 'mock shell wrapper')).toBe(true);
   } catch (error) {
     // Expected due to mocked process.exit
   }
@@ -87,11 +86,15 @@ test('setupCommand - should generate zsh wrapper when --zsh flag is provided', a
 test('setupCommand - should generate fish wrapper when --fish flag is provided', async () => {
   setupMocks();
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { fish: true }, positional: [] });
     
     expect(mockGenerateShellWrapper).toHaveBeenCalledWith('fish');
-    expect(consoleLogOutput).toContain('mock shell wrapper');
+    expect(mockLogger.hasLog('log', 'mock shell wrapper')).toBe(true);
   } catch (error) {
     // Expected due to mocked process.exit
   }
@@ -103,12 +106,16 @@ test('setupCommand - should auto-detect shell when --auto flag is provided', asy
   setupMocks();
   mockDetectShell.mockReturnValue('zsh');
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { auto: true }, positional: [] });
     
     expect(mockDetectShell).toHaveBeenCalled();
     expect(mockGenerateShellWrapper).toHaveBeenCalledWith('zsh');
-    expect(consoleLogOutput).toContain('mock shell wrapper');
+    expect(mockLogger.hasLog('log', 'mock shell wrapper')).toBe(true);
   } catch (error) {
     // Expected due to mocked process.exit
   }
@@ -120,11 +127,15 @@ test('setupCommand - should show error when auto-detection fails', async () => {
   setupMocks();
   (mockDetectShell as any).mockReturnValue(null);
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { auto: true }, positional: [] });
   } catch (error) {
     expect(exitCode).toBe(1);
-    expect(consoleErrorOutput.some(msg => msg.includes('Could not auto-detect shell'))).toBe(true);
+    expect(mockLogger.hasLog('error', 'Error: Could not auto-detect shell from $SHELL environment variable')).toBe(true);
   }
   
   restoreMocks();
@@ -134,12 +145,16 @@ test('setupCommand - should show help when no flags are provided', async () => {
   setupMocks();
   mockDetectShell.mockReturnValue('bash');
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: {}, positional: [] });
   } catch (error) {
     expect(exitCode).toBe(2);
-    expect(consoleErrorOutput.some(msg => msg.includes('Please specify a shell option'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('Usage: wt setup'))).toBe(true);
+    expect(mockLogger.hasLog('error', 'Error: Please specify a shell option')).toBe(true);
+    expect(mockLogger.hasLog('error', 'Usage: wt setup --bash|--zsh|--fish|--auto')).toBe(true);
   }
   
   restoreMocks();
@@ -150,12 +165,16 @@ test('setupCommand - should include detected shell instructions when no flags pr
   mockDetectShell.mockReturnValue('fish');
   mockGetShellSetupInstructions.mockReturnValue('fish instructions');
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: {}, positional: [] });
   } catch (error) {
     expect(mockDetectShell).toHaveBeenCalled();
     expect(mockGetShellSetupInstructions).toHaveBeenCalledWith('fish');
-    expect(consoleErrorOutput.some(msg => msg.includes('fish instructions'))).toBe(true);
+    expect(mockLogger.hasLog('error', 'fish instructions')).toBe(true);
   }
   
   restoreMocks();
@@ -165,12 +184,16 @@ test('setupCommand - should show generic instructions when shell not detected', 
   setupMocks();
   (mockDetectShell as any).mockReturnValue(null);
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: {}, positional: [] });
   } catch (error) {
-    expect(consoleErrorOutput.some(msg => msg.includes('# For bash: source'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('# For zsh:  source'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('# For fish: wt setup'))).toBe(true);
+    expect(mockLogger.hasLog('error', '# For bash: source <(wt setup --bash)')).toBe(true);
+    expect(mockLogger.hasLog('error', '# For zsh:  source <(wt setup --zsh)')).toBe(true);
+    expect(mockLogger.hasLog('error', '# For fish: wt setup --fish | source')).toBe(true);
   }
   
   restoreMocks();
@@ -182,12 +205,15 @@ test('setupCommand - should handle generation errors gracefully', async () => {
     throw new Error('Mock generation error');
   });
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { bash: true }, positional: [] });
   } catch (error) {
     expect(exitCode).toBe(1);
-    expect(consoleErrorOutput.some(msg => msg.includes('Error generating shell wrapper'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('Mock generation error'))).toBe(true);
+    expect(mockLogger.hasLog('error', 'Error generating shell wrapper: Mock generation error')).toBe(true);
   }
   
   restoreMocks();
@@ -195,6 +221,10 @@ test('setupCommand - should handle generation errors gracefully', async () => {
 
 test('setupCommand - bash flag should take precedence over other flags', async () => {
   setupMocks();
+  
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
   
   try {
     await setupCommand.handler({ args: {}, flags: { bash: true, zsh: true, fish: true }, positional: [] });
@@ -210,6 +240,10 @@ test('setupCommand - bash flag should take precedence over other flags', async (
 test('setupCommand - zsh flag should take precedence over fish flag', async () => {
   setupMocks();
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: { zsh: true, fish: true }, positional: [] });
     
@@ -224,14 +258,18 @@ test('setupCommand - zsh flag should take precedence over fish flag', async () =
 test('setupCommand - should show examples in help output', async () => {
   setupMocks();
   
+  const mockLogger = new MockLoggerService();
+  const services = createServiceContainer({ logger: mockLogger });
+  const setupCommand = createSetupCommand(services);
+  
   try {
     await setupCommand.handler({ args: {}, flags: {}, positional: [] });
   } catch (error) {
-    expect(consoleErrorOutput.some(msg => msg.includes('Examples:'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('wt setup --auto'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('wt setup --bash'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('wt setup --zsh'))).toBe(true);
-    expect(consoleErrorOutput.some(msg => msg.includes('wt setup --fish'))).toBe(true);
+    expect(mockLogger.hasLog('error', 'Examples:')).toBe(true);
+    expect(mockLogger.hasLog('error', '  wt setup --auto          # Auto-detect shell')).toBe(true);
+    expect(mockLogger.hasLog('error', '  wt setup --bash          # Generate bash functions')).toBe(true);
+    expect(mockLogger.hasLog('error', '  wt setup --zsh           # Generate zsh functions')).toBe(true);
+    expect(mockLogger.hasLog('error', '  wt setup --fish          # Generate fish functions')).toBe(true);
   }
   
   restoreMocks();
