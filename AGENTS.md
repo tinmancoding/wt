@@ -73,3 +73,158 @@ mock.module('node:child_process', () => ({
 - Look for `mock.module()` calls affecting `node:child_process`
 - Create isolation tests to verify subprocess functionality
 
+## Service Injection Architecture
+
+### Service Container Pattern
+The codebase uses dependency injection through a service container pattern for better testability and maintainability.
+
+**Core Services**:
+- `LoggerService`: Handles all console output (log, error, warn, info, debug)
+- `GitService`: Executes git commands and operations
+- `FileSystemService`: File system operations (read, write, access, stat, etc.)
+- `CommandService`: Non-git command execution
+
+**Service Container Creation**:
+```typescript
+import { createServiceContainer, createTestServiceContainer } from '@/services/container.ts';
+
+// Production services (uses real implementations)
+const services = createServiceContainer();
+
+// Test services (uses mock implementations)
+const testServices = await createTestServiceContainer();
+
+// Custom service mix
+const customServices = createServiceContainer({
+  logger: new SilentLoggerService(), // Silent for tests
+  git: new MockGitService()          // Mock for controlled responses
+});
+```
+
+### Testing with Service Injection
+
+**Unit Test Pattern** (PREFERRED):
+```typescript
+import { test, expect } from 'bun:test';
+import { MockLoggerService, MockGitService } from '@/services/test-implementations/index.ts';
+import { createServiceContainer } from '@/services/container.ts';
+
+test('feature works correctly', async () => {
+  const mockLogger = new MockLoggerService();
+  const mockGit = new MockGitService();
+  
+  const services = createServiceContainer({
+    logger: mockLogger,
+    git: mockGit
+  });
+
+  // Configure mock responses
+  mockGit.setCommandResponse(['branch'], 'main\nfeature');
+  
+  // Test your feature
+  const result = await someFeature(services);
+  
+  // Verify behavior
+  expect(result).toBe('expected');
+  expect(mockLogger.hasLog('log', 'Expected message')).toBe(true);
+  expect(mockGit.getExecutedCommands()).toContain({ gitDir: '/repo', args: ['branch'] });
+});
+```
+
+**Integration Test Pattern**:
+```typescript
+test('end-to-end functionality', async () => {
+  // Use real services for integration tests
+  const services = createServiceContainer();
+  
+  // Test with real git repository and commands
+  const result = await fullWorkflow(services);
+  expect(result).toBeDefined();
+});
+```
+
+### Mock Service Capabilities
+
+**MockLoggerService**:
+```typescript
+const mockLogger = new MockLoggerService();
+
+// Capture and verify log messages
+mockLogger.log('test message', 'arg1');
+expect(mockLogger.hasLog('log', 'test message')).toBe(true);
+expect(mockLogger.getLogsByLevel('log')[0]?.args).toEqual(['arg1']);
+
+// Clear history between tests
+mockLogger.clear();
+```
+
+**MockGitService**:
+```typescript
+const mockGit = new MockGitService();
+
+// Configure command responses
+mockGit.setCommandResponse(['status'], 'clean working tree');
+mockGit.setCommandResponse(['branch'], { stdout: 'main\nfeature', stderr: '', exitCode: 0 });
+
+// Simulate failures
+mockGit.setCommandResponse(['invalid'], { stdout: '', stderr: 'unknown command', exitCode: 1 });
+
+// Verify command execution
+const commands = mockGit.getExecutedCommands();
+expect(commands).toContain({ gitDir: '/repo', args: ['status'] });
+
+// Clear history
+mockGit.clear();
+```
+
+**SilentLoggerService**:
+```typescript
+// Use for tests where output isn't relevant
+const services = createServiceContainer({
+  logger: new SilentLoggerService()
+});
+```
+
+### Service Implementation Guidelines
+
+**Creating New Services**:
+1. Define interface in `src/services/types.ts`
+2. Create implementation in `src/services/implementations/`
+3. Create mock in `src/services/test-implementations/`
+4. Add to service container factory
+5. Write comprehensive tests
+
+**Service Interface Design**:
+- Keep interfaces focused and cohesive
+- Use async/await for I/O operations
+- Return meaningful error types
+- Accept configuration through constructor or methods
+
+### Migration from Console Calls
+
+**Before (Deprecated)**:
+```typescript
+console.log('Creating worktree...');
+console.error('Failed to create worktree');
+```
+
+**After (Correct)**:
+```typescript
+// In class constructor
+constructor(private services: ServiceContainer) {}
+
+// In methods
+this.services.logger.log('Creating worktree...');
+this.services.logger.error('Failed to create worktree');
+```
+
+**Backward Compatibility Functions**:
+```typescript
+// Keep existing function signatures for compatibility
+export async function createWorktree(branch: string): Promise<void> {
+  const services = createServiceContainer();
+  const worktreeOps = new WorktreeOperations(services);
+  return worktreeOps.createWorktree(branch);
+}
+```
+

@@ -3,8 +3,9 @@
  */
 
 import { resolve, dirname, join } from 'node:path';
-import { access, readFile, stat, constants } from 'node:fs/promises';
 import { EXIT_CODES } from './cli/types.ts';
+import type { FileSystemService, LoggerService } from './services/types.ts';
+import { createServiceContainer } from './services/container.ts';
 
 export interface RepositoryInfo {
   /** Root directory of the repository */
@@ -33,132 +34,123 @@ export class RepositoryError extends Error {
  * 3. Standard .git directory (fallback)
  */
 export async function detectRepository(startPath?: string): Promise<RepositoryInfo> {
-  const currentDir = startPath ? resolve(startPath) : resolve(process.cwd());
-  
-  return await walkUpDirectoryTree(currentDir);
-}
-
-/**
- * Walks up the directory tree to find a Git repository
- */
-async function walkUpDirectoryTree(currentPath: string): Promise<RepositoryInfo> {
-  // Prevent infinite loop by checking if we've reached the filesystem root
-  const parentPath = dirname(currentPath);
-  if (parentPath === currentPath) {
-    throw new RepositoryError(
-      'No Git repository found. Initialize a repository with "git init" or "wt init <git-url>".',
-      EXIT_CODES.GIT_REPO_NOT_FOUND
-    );
-  }
-
-  // Check for .bare/ directory first (preferred setup)
-  const bareDir = join(currentPath, '.bare');
-  if (await pathExists(bareDir) && await isDirectory(bareDir)) {
-    return {
-      rootDir: currentPath,
-      gitDir: bareDir,
-      type: 'bare',
-      bareDir: bareDir
-    };
-  }
-
-  // Check for .git file that points to .bare directory
-  const gitFile = join(currentPath, '.git');
-  if (await pathExists(gitFile) && await isFile(gitFile)) {
-    const gitFileContent = await readFile(gitFile, 'utf-8');
-    const gitdirMatch = gitFileContent.trim().match(/^gitdir:\s*(.+)$/);
-    
-    if (gitdirMatch && gitdirMatch[1]) {
-      const gitdirPath = resolve(currentPath, gitdirMatch[1]);
-      
-      // Check if it points to a .bare directory
-      if (gitdirPath.endsWith('.bare') || gitdirPath.endsWith('/.bare')) {
-        return {
-          rootDir: currentPath,
-          gitDir: gitdirPath,
-          type: 'gitfile',
-          bareDir: gitdirPath
-        };
-      }
-      
-      // Standard gitdir reference
-      return {
-        rootDir: currentPath,
-        gitDir: gitdirPath,
-        type: 'gitfile'
-      };
-    }
-  }
-
-  // Check for standard .git directory (fallback)
-  if (await pathExists(gitFile) && await isDirectory(gitFile)) {
-    return {
-      rootDir: currentPath,
-      gitDir: gitFile,
-      type: 'standard'
-    };
-  }
-
-  // Continue walking up the directory tree
-  return await walkUpDirectoryTree(parentPath);
-}
-
-/**
- * Checks if a path exists
- */
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Checks if a path is a directory
- */
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    const stats = await stat(path);
-    return stats.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Checks if a path is a file
- */
-async function isFile(path: string): Promise<boolean> {
-  try {
-    const stats = await stat(path);
-    return stats.isFile();
-  } catch {
-    return false;
-  }
+  const defaultServices = createServiceContainer();
+  const repoOps = new RepositoryOperations(defaultServices.fs, defaultServices.logger);
+  return repoOps.detectRepository(startPath);
 }
 
 /**
  * Validates that a detected repository is in a usable state
  */
 export async function validateRepository(repoInfo: RepositoryInfo): Promise<void> {
-  // Ensure git directory exists and is accessible
-  if (!await pathExists(repoInfo.gitDir)) {
-    throw new RepositoryError(
-      `Git directory not found: ${repoInfo.gitDir}`,
-      EXIT_CODES.FILESYSTEM_ERROR
-    );
+  const defaultServices = createServiceContainer();
+  const repoOps = new RepositoryOperations(defaultServices.fs, defaultServices.logger);
+  return repoOps.validateRepository(repoInfo);
+}
+
+/**
+ * Service-based repository operations class for dependency injection
+ */
+export class RepositoryOperations {
+  constructor(
+    private fs: FileSystemService,
+    private logger: LoggerService
+  ) {}
+
+  async detectRepository(startPath?: string): Promise<RepositoryInfo> {
+    const currentDir = startPath ? resolve(startPath) : resolve(process.cwd());
+    this.logger.debug(`Starting repository detection from: ${currentDir}`);
+    
+    return await this.walkUpDirectoryTree(currentDir);
   }
 
-  // Additional validation for bare repositories
-  if (repoInfo.type === 'bare' && repoInfo.bareDir) {
-    const configFile = join(repoInfo.bareDir, 'config');
-    if (!await pathExists(configFile)) {
-      throw new RepositoryError(
-        `Invalid bare repository: missing config file at ${configFile}`,
-        EXIT_CODES.FILESYSTEM_ERROR
-      );
+  private async walkUpDirectoryTree(currentPath: string): Promise<RepositoryInfo> {
+    this.logger.debug(`Checking directory: ${currentPath}`);
+    
+    // Prevent infinite loop by checking if we've reached the filesystem root
+    const parentPath = dirname(currentPath);
+    if (parentPath === currentPath) {
+      const message = 'No Git repository found. Initialize a repository with "git init" or "wt init <git-url>".';
+      this.logger.error(message);
+      throw new RepositoryError(message, EXIT_CODES.GIT_REPO_NOT_FOUND);
     }
+
+    // Check for .bare/ directory first (preferred setup)
+    const bareDir = join(currentPath, '.bare');
+    if (await this.fs.exists(bareDir) && await this.fs.isDirectory(bareDir)) {
+      this.logger.debug(`Found bare repository at: ${bareDir}`);
+      return {
+        rootDir: currentPath,
+        gitDir: bareDir,
+        type: 'bare',
+        bareDir: bareDir
+      };
+    }
+
+    // Check for .git file that points to .bare directory
+    const gitFile = join(currentPath, '.git');
+    if (await this.fs.exists(gitFile) && await this.fs.isFile(gitFile)) {
+      const gitFileContent = await this.fs.readFile(gitFile, 'utf-8');
+      const gitdirMatch = gitFileContent.trim().match(/^gitdir:\s*(.+)$/);
+      
+      if (gitdirMatch && gitdirMatch[1]) {
+        const gitdirPath = resolve(currentPath, gitdirMatch[1]);
+        
+        // Check if it points to a .bare directory
+        if (gitdirPath.endsWith('.bare') || gitdirPath.endsWith('/.bare')) {
+          this.logger.debug(`Found gitfile pointing to bare repository: ${gitdirPath}`);
+          return {
+            rootDir: currentPath,
+            gitDir: gitdirPath,
+            type: 'gitfile',
+            bareDir: gitdirPath
+          };
+        }
+        
+        // Standard gitdir reference
+        this.logger.debug(`Found gitfile pointing to: ${gitdirPath}`);
+        return {
+          rootDir: currentPath,
+          gitDir: gitdirPath,
+          type: 'gitfile'
+        };
+      }
+    }
+
+    // Check for standard .git directory (fallback)
+    if (await this.fs.exists(gitFile) && await this.fs.isDirectory(gitFile)) {
+      this.logger.debug(`Found standard git repository at: ${gitFile}`);
+      return {
+        rootDir: currentPath,
+        gitDir: gitFile,
+        type: 'standard'
+      };
+    }
+
+    // Continue walking up the directory tree
+    return await this.walkUpDirectoryTree(parentPath);
+  }
+
+  async validateRepository(repoInfo: RepositoryInfo): Promise<void> {
+    this.logger.debug(`Validating repository: ${repoInfo.gitDir}`);
+    
+    // Ensure git directory exists and is accessible
+    if (!await this.fs.exists(repoInfo.gitDir)) {
+      const message = `Git directory not found: ${repoInfo.gitDir}`;
+      this.logger.error(message);
+      throw new RepositoryError(message, EXIT_CODES.FILESYSTEM_ERROR);
+    }
+
+    // Additional validation for bare repositories
+    if (repoInfo.type === 'bare' && repoInfo.bareDir) {
+      const configFile = join(repoInfo.bareDir, 'config');
+      if (!await this.fs.exists(configFile)) {
+        const message = `Invalid bare repository: missing config file at ${configFile}`;
+        this.logger.error(message);
+        throw new RepositoryError(message, EXIT_CODES.FILESYSTEM_ERROR);
+      }
+    }
+    
+    this.logger.debug(`Repository validation successful`);
   }
 }

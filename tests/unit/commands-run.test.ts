@@ -1,60 +1,65 @@
-import { test, expect, describe, spyOn, beforeEach, afterEach, mock } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach, mock } from "bun:test";
+import { createRunCommand } from "../../src/commands/index.ts";
+import { createServiceContainer } from "../../src/services/container.ts";
+import { MockLoggerService } from "../../src/services/test-implementations/MockLoggerService.ts";
+import { MockGitService } from "../../src/services/test-implementations/MockGitService.ts";
+import { MockFileSystemService } from "../../src/services/test-implementations/MockFileSystemService.ts";
+import { MockCommandService } from "../../src/services/test-implementations/MockCommandService.ts";
+import { WorktreeOperations } from "../../src/worktree.ts";
 import type { RepositoryInfo } from "../../src/repository.ts";
 import type { WTConfig } from "../../src/config.ts";
-import type { WorktreeInfo } from "../../src/worktree.ts";
-import type { CommandResult } from "../../src/git.ts";
 
 describe("Run Command Unit Tests", () => {
   let exitSpy: any;
-  let consoleLogSpy: any;
-  let consoleErrorSpy: any;
+  let originalProcessExit: any;
 
-  // Mock modules
-  const mockDetectRepository = mock(() => Promise.resolve({
+  // Helper to create test services
+  function createTestServices() {
+    const mockLogger = new MockLoggerService();
+    const mockGit = new MockGitService();
+    const mockFs = new MockFileSystemService();
+    const mockCmd = new MockCommandService();
+    
+    const services = createServiceContainer({
+      logger: mockLogger,
+      git: mockGit,
+      fs: mockFs,
+      cmd: mockCmd
+    });
+    
+    return { services, mockLogger, mockGit, mockFs, mockCmd };
+  }
+
+  const mockRepoInfo: RepositoryInfo = {
     rootDir: "/test/repo",
-    gitDir: "/test/repo/.git",
-    type: "standard" as const
-  } as RepositoryInfo));
+    gitDir: "/test/repo/.git", 
+    type: "standard"
+  };
 
-  const mockLoadConfig = mock(() => Promise.resolve({
+  const mockConfig: WTConfig = {
     worktreeDir: "./",
     autoFetch: true,
     confirmDelete: false,
     defaultBranch: "main",
-    hooks: {
-      postCreate: null,
-      postRemove: null
-    }
-  } as WTConfig));
-
-  const mockRunCommandInWorktree = mock(() => Promise.resolve({
-    exitCode: 0,
-    stdout: "success",
-    stderr: ""
-  } as CommandResult));
+    hooks: { postCreate: null, postRemove: null }
+  };
 
   beforeEach(() => {
-    exitSpy = spyOn(process, "exit").mockImplementation(() => {
-      throw new Error("process.exit called");
+    originalProcessExit = process.exit;
+    exitSpy = mock((code?: number) => {
+      throw new Error(`Process exit called with code ${code ?? 0}`);
     });
-    consoleLogSpy = spyOn(console, "log").mockImplementation(() => {});
-    consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
-
-    // Reset mocks
-    mockDetectRepository.mockClear();
-    mockLoadConfig.mockClear();
-    mockRunCommandInWorktree.mockClear();
+    process.exit = exitSpy as any;
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    process.exit = originalProcessExit;
   });
 
   describe("runCommand configuration", () => {
-    test("should have correct command definition", async () => {
-      const { runCommand } = await import("../../src/commands/index.ts");
+    test("should have correct command definition", () => {
+      const { services } = createTestServices();
+      const runCommand = createRunCommand(services);
       
       expect(runCommand.name).toBe("run");
       expect(runCommand.description).toBe("Create worktree (if needed) and run command in it");
@@ -78,171 +83,130 @@ describe("Run Command Unit Tests", () => {
       expect(typeof runCommand.handler).toBe("function");
     });
 
-    test("should not have aliases", async () => {
-      const { runCommand } = await import("../../src/commands/index.ts");
+    test("should not have aliases", () => {
+      const { services } = createTestServices();
+      const runCommand = createRunCommand(services);
       expect(runCommand.aliases).toBeUndefined();
     });
 
-    test("should not have flags", async () => {
-      const { runCommand } = await import("../../src/commands/index.ts");
+    test("should not have flags", () => {
+      const { services } = createTestServices();
+      const runCommand = createRunCommand(services);
       expect(runCommand.flags).toBeUndefined();
     });
   });
 
-  describe("runCommandInWorktree function", () => {
-    let mockListWorktrees: any;
-    let mockCreateWorktreeWithBranch: any;
-    let mockExecuteCommand: any;
-
-    beforeEach(() => {
-      mockListWorktrees = mock(() => Promise.resolve([] as WorktreeInfo[]));
-      mockCreateWorktreeWithBranch = mock(() => Promise.resolve());
-      mockExecuteCommand = mock(() => Promise.resolve({
-        exitCode: 0,
-        stdout: "success",
-        stderr: ""
-      } as CommandResult));
-
-      // Mock the worktree module
-      mock.module("../../src/worktree.ts", () => ({
-        listWorktrees: mockListWorktrees,
-        createWorktreeWithBranch: mockCreateWorktreeWithBranch
-      }));
-
-      // Mock the git module
-      mock.module("../../src/git.ts", () => ({
-        executeCommand: mockExecuteCommand
-      }));
-    });
-
-    afterEach(() => {
-      mockListWorktrees.mockRestore();
-      mockCreateWorktreeWithBranch.mockRestore();
-      mockExecuteCommand.mockRestore();
-    });
-
+  describe("WorktreeOperations.runCommandInWorktree", () => {
     test("should create new worktree when none exists", async () => {
-      const { runCommandInWorktree } = await import("../../src/worktree.ts");
-      
-      const repoInfo: RepositoryInfo = {
-        rootDir: "/test/repo",
-        gitDir: "/test/repo/.git",
-        type: "standard"
-      };
-      
-      const config: WTConfig = {
-        worktreeDir: "./",
-        autoFetch: true,
-        confirmDelete: false,
-        defaultBranch: "main",
-        hooks: { postCreate: null, postRemove: null }
-      };
+      const { services, mockGit, mockCmd } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
 
       // Mock empty worktrees list
-      mockListWorktrees.mockResolvedValue([]);
+      mockGit.setCommandResponse(['worktree', 'list', '--porcelain'], '');
 
-      const result = await runCommandInWorktree(repoInfo, config, "feature-branch", "echo", ["hello"]);
+      // Mock branch resolution
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature-branch'], {
+        stdout: '',
+        stderr: '',
+        exitCode: 1 // Branch doesn't exist locally
+      });
 
-      expect(mockListWorktrees).toHaveBeenCalledWith(repoInfo);
-      expect(mockCreateWorktreeWithBranch).toHaveBeenCalledWith(repoInfo, config, "feature-branch");
-      expect(mockExecuteCommand).toHaveBeenCalledWith("echo", ["hello"], "/test/repo/feature-branch", true);
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+        stdout: 'refs/remotes/origin/feature-branch\n',
+        stderr: '',
+        exitCode: 0
+      });
+
+      // Mock worktree creation
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature-branch', '/test/repo/feature-branch', 'origin/feature-branch'], '');
+
+      // Mock command execution
+      mockCmd.setCommandResponse('echo', ['hello'], {
+        exitCode: 0,
+        stdout: "hello",
+        stderr: ""
+      });
+
+      const result = await worktreeOps.runCommandInWorktree(mockRepoInfo, mockConfig, "feature-branch", "echo", ["hello"]);
+
+      // Verify worktree creation was attempted
+      const gitCommands = mockGit.getExecutedCommands();
+      expect(gitCommands.some(cmd => cmd.args.includes('worktree') && cmd.args.includes('add'))).toBe(true);
+
+      // Verify command was executed
+      const cmdCommands = mockCmd.getExecutedCommands();
+      expect(cmdCommands.some(cmd => cmd.command === 'echo' && cmd.args.includes('hello'))).toBe(true);
+
       expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe("hello");
     });
 
     test("should use existing worktree when available", async () => {
-      const { runCommandInWorktree } = await import("../../src/worktree.ts");
-      
-      const repoInfo: RepositoryInfo = {
-        rootDir: "/test/repo",
-        gitDir: "/test/repo/.git",
-        type: "standard"
-      };
-      
-      const config: WTConfig = {
-        worktreeDir: "./",
-        autoFetch: true,
-        confirmDelete: false,
-        defaultBranch: "main",
-        hooks: { postCreate: null, postRemove: null }
-      };
+      const { services, mockGit, mockCmd, mockLogger } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
 
       // Mock existing worktree
-      const existingWorktree: WorktreeInfo = {
-        path: "/test/repo/feature-branch",
-        branch: "feature-branch",
-        commit: "abc123",
-        isCurrent: false,
-        isBare: false,
-        isDetached: false,
-        isLocked: false,
-        relativePath: "feature-branch"
-      };
-      
-      mockListWorktrees.mockResolvedValue([existingWorktree]);
+      const worktreeOutput = `worktree /test/repo/feature-branch
+HEAD abc123def456
+branch refs/heads/feature-branch`;
 
-      const result = await runCommandInWorktree(repoInfo, config, "feature-branch", "ls", ["-la"]);
+      mockGit.setCommandResponse(['worktree', 'list', '--porcelain'], worktreeOutput);
 
-      expect(mockListWorktrees).toHaveBeenCalledWith(repoInfo);
-      expect(mockCreateWorktreeWithBranch).not.toHaveBeenCalled();
-      expect(mockExecuteCommand).toHaveBeenCalledWith("ls", ["-la"], "/test/repo/feature-branch", true);
+      // Mock command execution
+      mockCmd.setCommandResponse('ls', ['-la'], {
+        exitCode: 0,
+        stdout: "total 8\ndrwxr-xr-x 2 user user 4096 Jan 1 12:00 .\ndrwxr-xr-x 3 user user 4096 Jan 1 12:00 ..",
+        stderr: ""
+      });
+
+      const result = await worktreeOps.runCommandInWorktree(mockRepoInfo, mockConfig, "feature-branch", "ls", ["-la"]);
+
+      // Verify no worktree creation was attempted
+      const gitCommands = mockGit.getExecutedCommands();
+      expect(gitCommands.every(cmd => !(cmd.args.includes('worktree') && cmd.args.includes('add')))).toBe(true);
+
+      // Verify command was executed
+      const cmdCommands = mockCmd.getExecutedCommands();
+      expect(cmdCommands.some(cmd => cmd.command === 'ls' && cmd.args.includes('-la'))).toBe(true);
+
       expect(result.exitCode).toBe(0);
+      expect(mockLogger.hasLog('log', "Using existing worktree for branch 'feature-branch' at /test/repo/feature-branch")).toBe(true);
     });
 
     test("should handle command execution failure", async () => {
-      const { runCommandInWorktree } = await import("../../src/worktree.ts");
-      
-      const repoInfo: RepositoryInfo = {
-        rootDir: "/test/repo",
-        gitDir: "/test/repo/.git",
-        type: "standard"
-      };
-      
-      const config: WTConfig = {
-        worktreeDir: "./",
-        autoFetch: true,
-        confirmDelete: false,
-        defaultBranch: "main",
-        hooks: { postCreate: null, postRemove: null }
-      };
+      const { services, mockGit, mockCmd } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
 
-      mockListWorktrees.mockResolvedValue([]);
-      mockExecuteCommand.mockResolvedValue({
+      // Mock empty worktrees list
+      mockGit.setCommandResponse(['worktree', 'list', '--porcelain'], '');
+
+      // Mock branch resolution for new branch
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature-branch'], {
+        stdout: '',
+        stderr: '',
+        exitCode: 1 // Branch doesn't exist locally
+      });
+
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+        stdout: 'refs/remotes/origin/main\n', // No matching remote branch
+        stderr: '',
+        exitCode: 0
+      });
+
+      // Mock worktree creation for new branch
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature-branch', '/test/repo/feature-branch'], '');
+
+      // Mock command execution failure
+      mockCmd.setCommandResponse('false', [], {
         exitCode: 1,
         stdout: "",
         stderr: "command failed"
       });
 
-      const result = await runCommandInWorktree(repoInfo, config, "feature-branch", "false", []);
+      const result = await worktreeOps.runCommandInWorktree(mockRepoInfo, mockConfig, "feature-branch", "false", []);
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toBe("command failed");
-    });
-  });
-
-  describe("executeCommand function", () => {
-    test("should have correct signature", async () => {
-      const { executeCommand } = await import("../../src/git.ts");
-      expect(typeof executeCommand).toBe("function");
-    });
-
-    test("should preserve exit codes", async () => {
-      // This test validates the interface exists and can be called
-      const mockResult: CommandResult = {
-        exitCode: 42,
-        stdout: "output",
-        stderr: "error"
-      };
-      
-      expect(mockResult.exitCode).toBe(42);
-      expect(mockResult.stdout).toBe("output");
-      expect(mockResult.stderr).toBe("error");
-    });
-
-    test("should handle environment inheritance", () => {
-      // Test that the function signature supports environment inheritance
-      // This is validated by the TypeScript compilation
-      const envTest = { ...process.env };
-      expect(typeof envTest).toBe("object");
     });
   });
 
