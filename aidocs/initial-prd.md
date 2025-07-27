@@ -105,9 +105,41 @@
 #### Technology Stack
 - **Runtime**: Bun (for single binary compilation)
 - **Language**: TypeScript
+- **Architecture**: Dependency injection with service container pattern
 - **Dependencies**: 
   - Git (system requirement)
   - GitHub CLI (optional, for PR features)
+
+#### Service Architecture
+WT uses a lightweight dependency injection system for better testability and maintainability:
+
+**Core Services**:
+- `LoggerService`: Handles all console output (log, error, warn, info, debug)
+- `GitService`: Executes git commands and operations
+- `FileSystemService`: File system operations (read, write, access, stat, etc.)
+- `CommandService`: Non-git command execution
+
+**Service Container Pattern**:
+```typescript
+// Production services (uses real implementations)
+const services = createServiceContainer();
+
+// Test services (uses mock implementations)
+const testServices = await createTestServiceContainer();
+
+// Custom service mix
+const customServices = createServiceContainer({
+  logger: new SilentLoggerService(), // Silent for tests
+  git: new MockGitService()          // Mock for controlled responses
+});
+```
+
+**Benefits**:
+- **Testable Output**: Can verify exact user messages in tests
+- **Isolated Testing**: No dangerous global mocks that break subprocess execution
+- **Flexible Logging**: Easy to switch to file logging, structured logging, etc.
+- **Error Tracking**: Centralized error handling and logging
+- **Extensibility**: Easy to add new service types (HTTP, database, etc.)
 
 #### Repository Detection
 Walk up directory tree looking for:
@@ -329,38 +361,43 @@ wt/
 
 ### Testing Strategy
 
-For every development phase, we implement both unit tests and integration tests following these principles:
+For every development phase, we implement both unit tests and integration tests using the dependency injection architecture:
 
-#### Unit Testing
+#### Unit Testing with Service Injection
 **Scope**: Core logic, utility functions, configuration management  
 **Coverage Goal**: Full coverage (100%) wherever possible
 
 **Approach**:
-- **Comprehensive Mocking**: Mock all external dependencies (git, GitHub CLI, file system operations)
-- **Isolated Testing**: Each unit test focuses on a single function or module
+- **Service Injection**: Use mock services instead of dangerous global mocks
+- **Isolated Testing**: Each unit test focuses on a single function or module with controlled dependencies
 - **Edge Case Coverage**: Test all error conditions, boundary cases, and invalid inputs
 - **Branch Resolution Logic**: Comprehensive testing of all branch scenarios (local, remote, new)
 - **Configuration Management**: Test all config variations, validation, and error handling
 - **Error Handling**: Test every error path and exit code scenario
 
-**Mock Strategy**:
+**Service Injection Strategy**:
 ```typescript
-// Mock external commands for predictable testing
-const mockGitCommand = vi.fn()
-const mockGhCommand = vi.fn()
+// Safe service injection for predictable testing
+const mockLogger = new MockLoggerService();
+const mockGit = new MockGitService();
+const services = createServiceContainer({
+  logger: mockLogger,
+  git: mockGit
+});
 
-// Test all possible git worktree responses
-mockGitCommand.mockImplementation((args) => {
-  if (args.includes('worktree list')) {
-    return { success: true, stdout: mockWorktreeListOutput }
-  }
-  // Handle all git command variations
-})
+// Configure mock responses
+mockGit.setCommandResponse(['worktree', 'list'], 'main /path/to/main');
+mockGit.setCommandResponse(['branch', '-a'], 'main\n  remotes/origin/main');
+
+// Test and verify behavior
+const result = await someFeature(services);
+expect(mockLogger.hasLog('log', 'Expected message')).toBe(true);
+expect(mockGit.getExecutedCommands()).toContain(['worktree', 'add', ...]);
 ```
 
-**Tools**: Bun's built-in test runner with Vitest-compatible mocking
+**Tools**: Bun's built-in test runner with service injection pattern
 
-#### Integration Testing  
+#### Integration Testing with Real Services
 **Scope**: End-to-end workflows with real git operations  
 **Focus**: Main functionality and most commonly used scenarios
 
@@ -368,9 +405,13 @@ mockGitCommand.mockImplementation((args) => {
 ```
 wt/
 ├── src/                    # Source code
+│   ├── services/          # Service interfaces and implementations
+│   │   ├── implementations/     # Real service implementations
+│   │   ├── test-implementations/ # Mock services for testing
+│   │   └── container.ts         # Service container factory
 ├── tests/
-│   ├── unit/              # Unit tests with full mocking
-│   ├── integration/       # Integration tests with real operations
+│   ├── unit/              # Unit tests with service injection
+│   ├── integration/       # Integration tests with real services
 │   └── fixtures/          # Pre-made test repositories and configurations
 ├── temp/                  # Temporary test repositories (gitignored)
 ├── docs/
@@ -378,10 +419,11 @@ wt/
 ```
 
 **Testing Philosophy**:
-- **Real Operations**: Use actual git commands for integration tests
+- **Real Services**: Use actual service implementations for integration tests
 - **Common Scenarios**: Focus on workflows developers use daily
-- **End-to-End Validation**: Test complete user journeys, not just individual commands
+- **End-to-End Validation**: Test complete user journeys with real dependencies
 - **Realistic Environments**: Test with various repository structures and states
+- **No Global Mocks**: Avoid dangerous module mocks that break subprocess execution
 
 **Key Integration Scenarios**:
 ```bash
@@ -403,8 +445,20 @@ wt/
 - Shell wrapper function testing across different shells
 ```
 
-**Temporary Repository Creation**:
+**Service-Based Testing Utilities**:
 ```typescript
+// Create test services for unit tests
+const testServices = await createTestServiceContainer();
+
+// Create real services for integration tests
+const realServices = createServiceContainer();
+
+// Create custom service mix
+const customServices = createServiceContainer({
+  logger: new SilentLoggerService(), // Silent for tests
+  git: new MockGitService()          // Mock for controlled responses
+});
+
 // Utilities for creating realistic test scenarios
 const tempRepo = await createTempRepo({
   branches: ['main', 'feature-1', 'feature-2'], 

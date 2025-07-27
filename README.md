@@ -231,21 +231,55 @@ bun run lint                   # Code style validation
 bun run build
 ```
 
+### Architecture
+
+WT uses a **dependency injection architecture** for better testability and maintainability:
+
+**Service Container Pattern**:
+- `LoggerService`: Handles all console output (log, error, warn, info, debug)
+- `GitService`: Executes git commands and operations
+- `FileSystemService`: File system operations (read, write, access, stat, etc.)
+- `CommandService`: Non-git command execution
+
+**Service Injection Benefits**:
+- **Testable Output**: Can verify exact user messages in tests
+- **Isolated Testing**: No dangerous global mocks that break subprocess execution
+- **Flexible Logging**: Easy to switch to file logging, structured logging, etc.
+- **Error Tracking**: Centralized error handling and logging
+
 ### Testing Strategy
 
-The project uses a comprehensive testing approach with two complementary testing levels:
+The project uses a comprehensive testing approach with dependency injection for reliable, isolated testing:
 
-**Unit Tests** - Full coverage with isolated testing:
-- Complete mocking of external dependencies (git, file system)
+**Unit Tests** - Service injection with complete isolation:
+- Use mock services (`MockLoggerService`, `MockGitService`, etc.) for predictable testing
 - 100% coverage goal for all core functionality
-- Comprehensive edge case and error condition testing
-- Fast execution with predictable, isolated test conditions
+- No global module mocks that can break subprocess execution
+- Fast execution with controlled, isolated test conditions
 
-**Integration Tests** - Real-world workflow validation:
-- End-to-end testing with actual git operations
+**Integration Tests** - Real services for end-to-end validation:
+- Use real service implementations for actual git operations
 - Focus on most commonly used features and workflows
 - Testing with various repository structures and states
 - Validation of user experience and error handling
+
+**Service Testing Pattern**:
+```typescript
+// Unit test with service injection
+const mockLogger = new MockLoggerService();
+const mockGit = new MockGitService();
+const services = createServiceContainer({
+  logger: mockLogger,
+  git: mockGit
+});
+
+// Configure mock responses
+mockGit.setCommandResponse(['branch'], 'main\nfeature');
+
+// Test and verify
+const result = await someFeature(services);
+expect(mockLogger.hasLog('log', 'Expected message')).toBe(true);
+```
 
 **Quality Gates**:
 - All tests must pass before advancing to new features
@@ -259,11 +293,16 @@ wt/
 ├── src/
 │   ├── cli/           # CLI parsing and commands
 │   ├── commands/      # Command implementations  
+│   ├── services/      # Service interfaces and implementations
+│   │   ├── implementations/     # Real service implementations
+│   │   ├── test-implementations/ # Mock services for testing
+│   │   ├── container.ts         # Service container factory
+│   │   └── types.ts            # Service interfaces
 │   ├── index.ts       # Entry point
 │   └── repository.ts  # Repository detection
 ├── tests/
-│   ├── unit/          # Unit tests with mocks (full coverage)
-│   ├── integration/   # Integration tests (main workflows)
+│   ├── unit/          # Unit tests with service injection
+│   ├── integration/   # Integration tests with real services
 │   └── fixtures/      # Test data and repositories
 ├── docs/              # Documentation
 ├── devbox.json        # Development environment

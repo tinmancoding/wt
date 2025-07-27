@@ -4,6 +4,33 @@
 
 This document outlines the detailed implementation plan for the WT (Git Worktree Manager) project. Each phase is designed to be manually testable and reviewable within a couple of minutes.
 
+## ⚠️ MAJOR ARCHITECTURE UPDATE
+
+**Dependency Injection Implementation Completed** ✅
+
+The project has undergone a major refactor to implement a comprehensive dependency injection architecture. This affects all phases and testing strategies:
+
+- **Service Container Pattern**: All external dependencies (git, filesystem, console, commands) are now abstracted through service interfaces
+- **Testing Revolution**: Replaced dangerous global mocks with safe service injection
+- **Improved Testability**: Can now verify exact user output and isolate all external dependencies
+- **Backward Compatibility**: All existing function signatures preserved
+
+**Key Changes**:
+- All console.* calls replaced with LoggerService
+- All git operations go through GitService  
+- All file operations go through FileSystemService
+- All command execution goes through CommandService
+- Comprehensive mock services for testing
+- Service container factory for dependency management
+
+**Impact on Implementation Plan**: 
+- Phases 1-4 have been completed with the new architecture
+- Testing framework (Phase 5) has been fully implemented with service injection
+- All subsequent phases should use the service injection pattern
+- No more global module mocks that break subprocess execution
+
+See `aidocs/implemented/dependency-injection-plan.md` for complete implementation details.
+
 ## Phase 1: Project Foundation & Core Architecture (1-2 hours)
 
 ### Phase 1.1: Project Setup
@@ -273,73 +300,80 @@ This document outlines the detailed implementation plan for the WT (Git Worktree
   - Integration with existing shell environments
 
 
-## Phase 5: Testing Framework (1.5 hours)
+## Phase 5: Testing Framework with Dependency Injection (COMPLETED)
 
-### Phase 5.1: Unit Testing Setup
+### Phase 5.1: Service-Based Testing Setup ✅
 **Duration**: 45 minutes  
 **Manual Test**: Run test suite and verify coverage
 
 **Tasks**:
 - [x] Set up Bun test runner configuration with coverage reporting
-- [x] Create comprehensive mock interfaces for git commands
-- [x] Create mock interfaces for file system operations
+- [x] Implement service container pattern for testing
+- [x] Create comprehensive mock service implementations
 - [x] Add tests for repository detection (full coverage)
 - [x] Add tests for configuration management (full coverage)
 - [x] Add tests for branch resolution logic (full coverage)
-- [x] Implement test utilities for common mocking patterns
+- [x] Implement test utilities for service injection patterns
 
 **Test Command**: `bun test unit/ --coverage`
 
 **Testing Requirements**:
 - **Coverage Goal**: 100% line and branch coverage where possible
-- **Mock Strategy**: Complete isolation from external dependencies
+- **Service Injection Strategy**: Complete isolation using mock services
 - **Test Organization**: Group tests by module with clear naming
 - **Edge Cases**: Comprehensive testing of error conditions and boundary cases
 
-**Mock Implementation Requirements**:
+**Service Injection Implementation**:
 ```typescript
-// Example comprehensive mocking setup
-interface GitCommandMock {
-  mockWorktreeList(output: string): void
-  mockBranchExists(branch: string, exists: boolean): void  
-  mockFetch(success: boolean): void
-  mockWorktreeAdd(success: boolean): void
-  resetMocks(): void
-}
+// Service-based testing with dependency injection
+const mockLogger = new MockLoggerService();
+const mockGit = new MockGitService();
+const mockFs = new MockFileSystemService();
+const mockCmd = new MockCommandService();
 
-interface FileSystemMock {
-  mockFileExists(path: string, exists: boolean): void
-  mockDirectoryExists(path: string, exists: boolean): void
-  mockReadFile(path: string, content: string | Error): void
-  mockWriteFile(path: string, success: boolean): void
-}
+const services = createServiceContainer({
+  logger: mockLogger,
+  git: mockGit,
+  fs: mockFs,
+  cmd: mockCmd
+});
+
+// Configure mock responses
+mockGit.setCommandResponse(['worktree', 'list'], 'main /path/to/main');
+mockLogger.clear(); // Reset between tests
+
+// Test and verify
+const result = await someFeature(services);
+expect(mockLogger.hasLog('log', 'Expected message')).toBe(true);
 ```
 
-### Phase 5.2: Integration Testing Setup  
+### Phase 5.2: Integration Testing with Real Services ✅
 **Duration**: 45 minutes  
 **Manual Test**: Run integration tests with temporary repositories
 
 **Tasks**:
 - [x] Create temporary repository utilities with cleanup
 - [x] Add test fixtures for various repository scenarios
-- [x] Implement common workflow testing patterns
+- [x] Implement common workflow testing patterns with real services
 - [x] Add cleanup mechanisms for test repositories
 - [x] Create integration test suite for main user workflows
 - [x] Set up CI-compatible test environment
+- [x] Migrate from global mocks to service injection
 
 **Test Command**: `bun test integration/`
 
 **Testing Requirements**:
 - **Focus**: Most commonly used scenarios and end-to-end workflows
-- **Real Operations**: Use actual git commands, not mocks
+- **Real Services**: Use actual service implementations, not mocks
 - **Cleanup**: Automatic cleanup of temporary repositories
 - **Isolation**: Each test runs in a fresh environment
+- **No Global Mocks**: Avoid dangerous module mocks that break subprocess execution
 
 **Key Integration Test Scenarios**:
 ```typescript
 // Priority integration tests (most common workflows)
 describe('Core Worktree Workflow', () => {
-  test('create → switch → work → remove cycle')
+  test('create → switch → work → remove cycle with real services')
   test('multiple worktrees management')
   test('repository detection across directory structures')
 })
@@ -350,14 +384,19 @@ describe('Branch Resolution', () => {
   test('new branch worktree creation')
 })
 
-describe('Configuration System', () => {
-  test('config auto-detection and loading')
-  test('config persistence and updates')
+describe('Service Integration', () => {
+  test('real git operations through GitService')
+  test('file system operations through FileSystemService')
+  test('logger output verification in integration context')
 })
 ```
 
-**Temporary Repository Utilities**:
+**Service-Based Testing Utilities**:
 ```typescript
+// Use real services for integration tests
+const services = createServiceContainer();
+
+// Create temporary repositories with real operations
 interface TempRepoOptions {
   branches: string[]
   commits?: number
@@ -474,25 +513,26 @@ async function createTempRepo(options: TempRepoOptions): Promise<TempRepo>
 
 **Test Command**: `bun run build && ./wt --help`
 
-## Testing Strategy per Phase
+## Testing Strategy per Phase (Updated for Dependency Injection)
 
-Each phase includes comprehensive testing requirements:
+Each phase includes comprehensive testing requirements using the service injection architecture:
 
 ### Testing Requirements for Every Phase
 
-1. **Unit Tests (Full Coverage Goal)**:
+1. **Unit Tests with Service Injection (Full Coverage Goal)**:
    - Write unit tests immediately after implementing each task
    - Aim for 100% coverage where practically possible
-   - Mock all external dependencies (git, file system, network)
-   - Test all error conditions and edge cases
-   - Validate all exit codes and error messages
+   - Use mock services instead of dangerous global mocks
+   - Test all error conditions and edge cases with controlled service responses
+   - Validate all exit codes and error messages through service interactions
 
-2. **Integration Tests (Common Scenarios)**:
-   - Test main user workflows end-to-end
+2. **Integration Tests with Real Services (Common Scenarios)**:
+   - Test main user workflows end-to-end with real service implementations
    - Focus on most commonly used features
-   - Use real git operations and file system
+   - Use real git operations through GitService
    - Test with various repository structures
    - Validate user experience and error handling
+   - Ensure subprocess execution remains functional (no global mocks)
 
 3. **Quality Gates**:
    - **No advancing to next phase** until current phase tests pass
@@ -500,6 +540,7 @@ Each phase includes comprehensive testing requirements:
    - Run `bun run type-check` and fix all TypeScript errors
    - Run `bun run lint` and fix all linting issues
    - Verify manual test commands work as expected
+   - **Critical**: Ensure no global module mocks that affect subprocess execution
 
 ### Testing Commands for Each Phase
 
@@ -528,20 +569,35 @@ Each phase adds specific testing requirements:
 - **Phase 5**: Testing infrastructure itself
 - **Phase 6+**: Advanced features with backward compatibility testing
 
-**Test Organization**:
+**Test Organization with Service Architecture**:
 ```
 tests/
 ├── unit/
+│   ├── services/         # Service container and implementations
 │   ├── cli/              # CLI parsing and dispatch
 │   ├── config/           # Configuration management
 │   ├── repository/       # Repository detection
 │   ├── worktree/         # Worktree operations
 │   └── utils/            # Utility functions
 ├── integration/
-│   ├── workflows/        # End-to-end user workflows
+│   ├── workflows/        # End-to-end user workflows with real services
 │   ├── commands/         # Individual command testing
 │   └── scenarios/        # Complex multi-step scenarios
 └── fixtures/             # Test data and repositories
+```
+
+**Service Testing Patterns**:
+```typescript
+// Unit test pattern with service injection
+const mockLogger = new MockLoggerService();
+const mockGit = new MockGitService();
+const services = createServiceContainer({
+  logger: mockLogger,
+  git: mockGit
+});
+
+// Integration test pattern with real services
+const services = createServiceContainer();
 ```
 
 ## Success Criteria
