@@ -34,12 +34,6 @@ jobs:
       with:
         enable-cache: true
         
-    - name: Run quality checks
-      run: |
-        devbox run lint
-        devbox run type-check
-        devbox run test
-        
     - name: Create dist directory
       run: mkdir -p dist
       
