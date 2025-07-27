@@ -11,37 +11,31 @@ A fast, intuitive command-line tool for managing Git worktrees with smart branch
 - **Repository initialization** - Set up bare repositories optimized for worktrees
 - **Configurable workflows** - Customize behavior with hooks and settings
 
+## Installation
+
+### Prerequisites
+- Git 2.5+ (for worktree support)
+- GitHub CLI (optional, for PR features)
+
+### Install from Release
+
+Download the latest binary from the [releases page](https://github.com/tinmancoding/wt/releases):
+
+```bash
+# Download and install (replace with actual release URL)
+curl -L https://github.com/tinmancoding/wt/releases/latest/download/wt-linux -o wt
+chmod +x wt
+sudo mv wt /usr/local/bin/
+
+# Verify installation
+wt --help
+```
+
+### Build from Source
+
+If you prefer to build from source, see the [Development Guide](docs/development_guide.md).
+
 ## Quick Start
-
-### Installation
-
-1. **Prerequisites**
-   - Git 2.5+ (for worktree support)
-   - [Devbox](https://www.jetpack.io/devbox) (for development)
-   - GitHub CLI (optional, for PR features)
-
-2. **Development Setup**
-   ```bash
-   # Clone and enter development environment
-   git clone <repository-url>
-   cd wt
-   devbox shell
-   
-   # Dependencies are automatically installed
-   # Run the tool in development mode
-   bun run dev --help
-   ```
-
-3. **Build Binary**
-   ```bash
-   # Create production binary
-   bun run build
-   
-   # Use the binary
-   ./wt --help
-   ```
-
-### Basic Usage
 
 ```bash
 # Shell integration setup (one-time)
@@ -205,109 +199,7 @@ source <(wt setup --auto)
 
 ## Development
 
-### Requirements
-- [Devbox](https://www.jetpack.io/devbox) for environment management
-- Bun runtime (automatically managed by Devbox)
-- Git with user configuration
-
-### Development Workflow
-```bash
-# Enter development environment
-devbox shell
-
-# Run in development mode
-bun run dev [command]
-
-# Testing (comprehensive coverage required)
-bun run test                    # Run all tests  
-bun run test:unit              # Unit tests with full coverage
-bun run test:integration       # Integration tests for main workflows
-
-# Quality assurance (all must pass before commits)
-bun run type-check             # TypeScript validation
-bun run lint                   # Code style validation
-
-# Build production binary
-bun run build
-```
-
-### Architecture
-
-WT uses a **dependency injection architecture** for better testability and maintainability:
-
-**Service Container Pattern**:
-- `LoggerService`: Handles all console output (log, error, warn, info, debug)
-- `GitService`: Executes git commands and operations
-- `FileSystemService`: File system operations (read, write, access, stat, etc.)
-- `CommandService`: Non-git command execution
-
-**Service Injection Benefits**:
-- **Testable Output**: Can verify exact user messages in tests
-- **Isolated Testing**: No dangerous global mocks that break subprocess execution
-- **Flexible Logging**: Easy to switch to file logging, structured logging, etc.
-- **Error Tracking**: Centralized error handling and logging
-
-### Testing Strategy
-
-The project uses a comprehensive testing approach with dependency injection for reliable, isolated testing:
-
-**Unit Tests** - Service injection with complete isolation:
-- Use mock services (`MockLoggerService`, `MockGitService`, etc.) for predictable testing
-- 100% coverage goal for all core functionality
-- No global module mocks that can break subprocess execution
-- Fast execution with controlled, isolated test conditions
-
-**Integration Tests** - Real services for end-to-end validation:
-- Use real service implementations for actual git operations
-- Focus on most commonly used features and workflows
-- Testing with various repository structures and states
-- Validation of user experience and error handling
-
-**Service Testing Pattern**:
-```typescript
-// Unit test with service injection
-const mockLogger = new MockLoggerService();
-const mockGit = new MockGitService();
-const services = createServiceContainer({
-  logger: mockLogger,
-  git: mockGit
-});
-
-// Configure mock responses
-mockGit.setCommandResponse(['branch'], 'main\nfeature');
-
-// Test and verify
-const result = await someFeature(services);
-expect(mockLogger.hasLog('log', 'Expected message')).toBe(true);
-```
-
-**Quality Gates**:
-- All tests must pass before advancing to new features
-- No commits allowed with failing tests or linting errors
-- TypeScript compilation must succeed without errors
-- Integration tests validate real-world usage scenarios
-
-### Project Structure
-```
-wt/
-├── src/
-│   ├── cli/           # CLI parsing and commands
-│   ├── commands/      # Command implementations  
-│   ├── services/      # Service interfaces and implementations
-│   │   ├── implementations/     # Real service implementations
-│   │   ├── test-implementations/ # Mock services for testing
-│   │   ├── container.ts         # Service container factory
-│   │   └── types.ts            # Service interfaces
-│   ├── index.ts       # Entry point
-│   └── repository.ts  # Repository detection
-├── tests/
-│   ├── unit/          # Unit tests with service injection
-│   ├── integration/   # Integration tests with real services
-│   └── fixtures/      # Test data and repositories
-├── docs/              # Documentation
-├── devbox.json        # Development environment
-└── package.json       # Dependencies and scripts
-```
+For development setup, testing, and contributing guidelines, see the [Development Guide](docs/development_guide.md).
 
 ## Why Worktrees?
 
@@ -320,16 +212,7 @@ Git worktrees allow you to have multiple working directories for a single reposi
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make changes and add comprehensive tests:
-   - Write unit tests for all new functionality (aim for 100% coverage)
-   - Add integration tests for main user workflows
-   - Ensure all tests pass: `bun run test`
-4. Validate code quality:
-   - Type check: `bun run type-check`
-   - Lint: `bun run lint`
-5. Submit a pull request with test coverage details
+We welcome contributions! Please see the [Development Guide](docs/development_guide.md) for detailed instructions on setting up your development environment, running tests, and submitting pull requests.
 
 ## License
 
