@@ -20,6 +20,9 @@ jobs:
       with:
         enable-cache: true
         
+    - name: Configure Git to use main as default branch
+      run: git config --global init.defaultBranch main
+        
     - name: Lint check
       run: devbox run lint
       
@@ -28,10 +31,10 @@ jobs:
       
     - name: Unit tests
       run: devbox run test:unit
-      
+        
     - name: Build for integration tests
       run: devbox run build
-      
+        
     - name: Integration tests
       run: devbox run test:integration
       
@@ -54,8 +57,11 @@ jobs:
       with:
         enable-cache: true
         
+    - name: Configure Git to use main as default branch
+      run: git config --global init.defaultBranch main
+        
     - name: Build for integration tests
       run: devbox run build
-        
+      
     - name: Integration tests
       run: devbox run test:integration
