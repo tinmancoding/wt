@@ -5,7 +5,6 @@ import {
   listWorktrees, 
   formatWorktree, 
   formatWorktreeHeader, 
-  createWorktreeWithBranch, 
   findWorktreesByPattern,
   removeWorktree,
   deleteBranch,
