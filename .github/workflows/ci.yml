@@ -29,6 +29,9 @@ jobs:
     - name: Unit tests
       run: devbox run test:unit
       
+    - name: Build for integration tests
+      run: devbox run build
+      
     - name: Integration tests
       run: devbox run test:integration
       
@@ -50,6 +53,9 @@ jobs:
       uses: jetify-com/devbox-install-action@v0.12.0
       with:
         enable-cache: true
+        
+    - name: Build for integration tests
+      run: devbox run build
         
     - name: Integration tests
       run: devbox run test:integration
