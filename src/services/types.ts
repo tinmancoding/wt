@@ -33,6 +33,7 @@ export interface FileSystemService {
   exists(path: string): Promise<boolean>;
   isDirectory(path: string): Promise<boolean>;
   isFile(path: string): Promise<boolean>;
+  chdir(path: string): void;
 }
 
 export interface CommandService {

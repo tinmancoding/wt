@@ -49,7 +49,8 @@ export const EXIT_CODES = {
   INVALID_ARGUMENTS: 2,
   GIT_REPO_NOT_FOUND: 3,
   NETWORK_ERROR: 4,
-  FILESYSTEM_ERROR: 5
+  FILESYSTEM_ERROR: 5,
+  GIT_ERROR: 6
 } as const;
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];

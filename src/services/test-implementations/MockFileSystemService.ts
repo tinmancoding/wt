@@ -15,6 +15,9 @@ export class MockFileSystemService implements FileSystemService {
   private directories = new Set<string>();
   private accessiblePaths = new Set<string>();
   private mockStats = new Map<string, MockStats>();
+  private currentDirectory = '/';
+  private fileWrites: Array<{path: string, data: string, encoding?: BufferEncoding}> = [];
+  private chdirCalls: string[] = [];
   
   // Configuration methods for tests
   setFileContent(path: string, content: string): void {
@@ -47,13 +50,22 @@ export class MockFileSystemService implements FileSystemService {
     this.directories.clear();
     this.accessiblePaths.clear();
     this.mockStats.clear();
+    this.currentDirectory = '/';
+    this.fileWrites = [];
+    this.chdirCalls = [];
   }
 
   getFileWrites(): Array<{path: string, data: string, encoding?: BufferEncoding}> {
     return [...this.fileWrites];
   }
 
-  private fileWrites: Array<{path: string, data: string, encoding?: BufferEncoding}> = [];
+  getChdirCalls(): string[] {
+    return [...this.chdirCalls];
+  }
+
+  getCurrentDirectory(): string {
+    return this.currentDirectory;
+  }
 
   // FileSystemService implementation
   async readFile(path: string, _encoding: BufferEncoding = 'utf-8'): Promise<string> {
@@ -120,5 +132,10 @@ export class MockFileSystemService implements FileSystemService {
     } catch {
       return false;
     }
+  }
+  
+  chdir(path: string): void {
+    this.chdirCalls.push(path);
+    this.currentDirectory = path;
   }
 }
