@@ -19,17 +19,30 @@ A fast, intuitive command-line tool for managing Git worktrees with smart branch
 
 ### Install from Release
 
-Download the latest binary from the [releases page](https://github.com/tinmancoding/wt/releases):
+Use the official install script for automatic platform detection and installation:
 
 ```bash
-# Download and install (replace with actual release URL)
-curl -L https://github.com/tinmancoding/wt/releases/latest/download/wt-linux -o wt
-chmod +x wt
-sudo mv wt /usr/local/bin/
+# Quick install (latest version)
+curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | sh
+
+# Install specific version
+WT_INSTALL_VERSION=v0.2.1 curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | sh
+
+# Install to custom path (default: ~/.local/bin)
+WT_INSTALL_PATH=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | sh
 
 # Verify installation
 wt --help
 ```
+
+#### Manual Installation
+
+Alternatively, download binaries directly from the [releases page](https://github.com/tinmancoding/wt/releases):
+
+- **Linux**: `wt-linux-x64.tar.gz` or `wt-linux-arm64.tar.gz`
+- **macOS**: `wt-darwin-x64.zip` or `wt-darwin-arm64.zip`
+
+All binaries include SHA256 checksums for verification.
 
 ### Build from Source
 
