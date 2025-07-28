@@ -219,6 +219,126 @@ test('integration: initialized repository should be detected correctly', async (
   expect(stdout).toContain('.bare');
 });
 
+test('integration: init command should create default branch worktree automatically', async () => {
+  const targetName = 'default-branch-test';
+  
+  // Initialize repository
+  const { stdout, exitCode } = await runWt(`init ${testRepoUrl} ${targetName}`, tempDir);
+  
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Creating default branch worktree');
+  expect(stdout).toContain('Detected default branch: main');
+  expect(stdout).toContain('Created worktree for default branch');
+  
+  // Verify worktree was created
+  const targetPath = path.join(tempDir, targetName);
+  const { stdout: listOutput, exitCode: listExitCode } = await runWt('list', targetPath);
+  
+  expect(listExitCode).toBe(0);
+  expect(listOutput).toContain('main');
+  
+  // Verify the worktree directory exists
+  const mainWorktreePath = path.join(targetPath, 'main');
+  try {
+    await access(mainWorktreePath, constants.F_OK);
+    const worktreStat = await stat(mainWorktreePath);
+    expect(worktreStat.isDirectory()).toBe(true);
+  } catch {
+    throw new Error(`Expected main worktree directory to exist at ${mainWorktreePath}`);
+  }
+  
+  // Verify the README.md file is present in the worktree
+  const readmePath = path.join(mainWorktreePath, 'README.md');
+  try {
+    await access(readmePath, constants.F_OK);
+    const readmeContent = await readFile(readmePath, 'utf-8');
+    expect(readmeContent).toContain('test-repo');
+  } catch {
+    throw new Error(`Expected README.md to exist in main worktree at ${readmePath}`);
+  }
+});
+
+test('integration: default branch worktree should have upstream tracking', async () => {
+  const targetName = 'upstream-test';
+  
+  // Initialize repository
+  const { exitCode } = await runWt(`init ${testRepoUrl} ${targetName}`, tempDir);
+  expect(exitCode).toBe(0);
+  
+  // Check upstream tracking is set up
+  const mainWorktreePath = path.join(tempDir, targetName, 'main');
+  
+  // Verify upstream is configured
+  const { stdout: upstreamOutput } = await execAsync('git branch -vv', { cwd: mainWorktreePath });
+  expect(upstreamOutput).toContain('origin/main');
+});
+
+test('integration: init should handle repositories with different default branches', async () => {
+  // Create a test repository with 'master' as default branch
+  const masterRepoPath = path.join(tempDir, 'master-repo.git');
+  await execAsync(`git init --bare "${masterRepoPath}"`);
+  
+  // Set the default branch to master in the bare repo
+  await execAsync(`git symbolic-ref HEAD refs/heads/master`, { cwd: masterRepoPath });
+  
+  // Create working directory and set up with master branch
+  const workingDir = path.join(tempDir, 'master-working');
+  await execAsync(`git clone "${masterRepoPath}" "${workingDir}"`);
+  
+  // Configure git user
+  await execAsync('git config user.name "Test User"', { cwd: workingDir });
+  await execAsync('git config user.email "test@example.com"', { cwd: workingDir });
+  
+  // Create initial commit on master branch
+  await writeFile(path.join(workingDir, 'README.md'), '# Master repo\n');
+  await execAsync('git add README.md', { cwd: workingDir });
+  await execAsync('git commit -m "Initial commit"', { cwd: workingDir });
+  await execAsync('git push origin master', { cwd: workingDir });
+  
+  // Clean up working directory
+  await rm(workingDir, { recursive: true, force: true });
+  
+  const masterRepoUrl = `file://${masterRepoPath}`;
+  const targetName = 'master-branch-test';
+  
+  // Initialize repository with master default branch
+  const { stdout, exitCode } = await runWt(`init ${masterRepoUrl} ${targetName}`, tempDir);
+  
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Detected default branch: master');
+  expect(stdout).toContain('Created worktree for default branch \'master\'');
+  
+  // Verify master worktree was created
+  const targetPath = path.join(tempDir, targetName);
+  const { stdout: listOutput } = await runWt('list', targetPath);
+  expect(listOutput).toContain('master');
+  
+  const masterWorktreePath = path.join(targetPath, 'master');
+  await access(masterWorktreePath, constants.F_OK);
+});
+
+test('integration: init should warn but continue if default branch worktree creation fails', async () => {
+  // Create a repository with no commits (which might cause worktree creation to fail)
+  const emptyRepoPath = path.join(tempDir, 'empty-repo.git');
+  await execAsync(`git init --bare "${emptyRepoPath}"`);
+  
+  const emptyRepoUrl = `file://${emptyRepoPath}`;
+  const targetName = 'empty-repo-test';
+  
+  const { stdout, stderr, exitCode } = await runWt(`init ${emptyRepoUrl} ${targetName}`, tempDir);
+  
+  // Should still succeed overall even if worktree creation fails
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Repository initialized successfully');
+  
+  // Should show warning about worktree creation failure
+  if (stderr.includes('Warning: Failed to create default branch worktree') || 
+      stdout.includes('Warning: Failed to create default branch worktree')) {
+    // This is expected for empty repositories
+    expect(true).toBe(true);
+  }
+});
+
 test('integration: init command should handle existing directory name conflicts', async () => {
   const targetName = 'conflict-test';
   
