@@ -8,6 +8,8 @@ import { EXIT_CODES } from './cli/types.ts';
 import type { RepositoryInfo } from './repository.ts';
 import type { ServiceContainer } from './services/types.ts';
 import { createServiceContainer } from './services/container.ts';
+import { WorktreeOperations } from './worktree.ts';
+import { loadConfig } from './config.ts';
 
 export class RepositoryInitError extends Error {
   constructor(message: string, public readonly code: number = EXIT_CODES.GENERAL_ERROR) {
@@ -120,7 +122,7 @@ export class InitOperations {
       
       // Validate targetName characters 
       if (trimmedTarget.includes('/') || trimmedTarget.includes('\\') || trimmedTarget.includes('@')) {
-        throw new RepositoryInitError('Invalid repository name: contains invalid characters', EXIT_CODES.INVALID_ARGUMENTS);
+        throw new RepositoryInitError('Repository name: contains invalid characters', EXIT_CODES.INVALID_ARGUMENTS);
       }
       
       repoName = trimmedTarget;
@@ -157,14 +159,20 @@ export class InitOperations {
       this.services.logger.log('Fetching all remote branches...');
       await this.fetchAllRemoteBranches(bareDir);
       
-      this.services.logger.log(`Repository initialized successfully in ${targetDir}`);
-      
-      return {
+      const repoInfo: RepositoryInfo = {
         rootDir: targetDir,
         gitDir: bareDir,
         type: 'bare',
         bareDir: bareDir
       };
+      
+      // Detect and create default branch worktree
+      this.services.logger.log('Creating default branch worktree...');
+      await this.createDefaultBranchWorktree(repoInfo);
+      
+      this.services.logger.log(`Repository initialized successfully in ${targetDir}`);
+      
+      return repoInfo;
       
     } catch (error) {
       if (error instanceof GitError) {
@@ -226,6 +234,109 @@ export class InitOperations {
         throw error;
       }
       throw new GitError(`Failed to fetch branches: ${error instanceof Error ? error.message : 'Unknown error'}`, '', -1);
+    }
+  }
+
+  /**
+   * Detects the default branch from the bare repository's HEAD file
+   */
+  private async detectDefaultBranch(bareDir: string): Promise<string> {
+    const headFilePath = join(bareDir, 'HEAD');
+    
+    try {
+      const headContent = await this.services.fs.readFile(headFilePath, 'utf8');
+      const headLine = headContent.trim();
+      
+      // HEAD file should contain something like "ref: refs/heads/main"
+      const match = headLine.match(/^ref:\s*refs\/heads\/(.+)$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+      
+      // Fallback: try to detect from remote HEAD
+      const result = await this.services.git.executeCommandWithResult(bareDir, ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+      if (result.exitCode === 0) {
+        const remoteHeadMatch = result.stdout.trim().match(/refs\/remotes\/origin\/(.+)$/);
+        if (remoteHeadMatch && remoteHeadMatch[1]) {
+          return remoteHeadMatch[1];
+        }
+      }
+      
+      // Last resort fallback
+      throw new Error('Could not determine default branch');
+    } catch (error) {
+      // If we can't detect the default branch, try common defaults
+      const commonDefaults = ['main', 'master', 'develop', 'development'];
+      
+      for (const branch of commonDefaults) {
+        try {
+          const result = await this.services.git.executeCommandWithResult(bareDir, ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`]);
+          if (result.exitCode === 0) {
+            this.services.logger.warn(`Could not detect default branch from HEAD file, using found branch: ${branch}`);
+            return branch;
+          }
+        } catch {
+          // Continue trying other branches
+        }
+      }
+      
+      throw new RepositoryInitError(
+        `Could not determine default branch: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
+        'Make sure the repository has a valid default branch.',
+        EXIT_CODES.GIT_ERROR
+      );
+    }
+  }
+
+  /**
+   * Creates a worktree for the default branch and sets up upstream tracking
+   */
+  private async createDefaultBranchWorktree(repoInfo: RepositoryInfo): Promise<void> {
+    try {
+      // Detect the default branch
+      const defaultBranch = await this.detectDefaultBranch(repoInfo.gitDir);
+      this.services.logger.log(`Detected default branch: ${defaultBranch}`);
+      
+      // Load config to get worktree directory setting
+      const config = await loadConfig(repoInfo);
+      
+      // Create worktree for the default branch
+      const worktreeOps = new WorktreeOperations(this.services);
+      
+      // Change to the repository directory temporarily to ensure relative paths work correctly
+      const originalCwd = process.cwd();
+      this.services.fs.chdir(repoInfo.rootDir);
+      
+      try {
+        // Resolve branch and create worktree
+        const resolution = await worktreeOps.resolveBranch(repoInfo, defaultBranch, config);
+        const worktreePath = join(repoInfo.rootDir, config.worktreeDir, defaultBranch);
+        
+        await worktreeOps.createWorktree(repoInfo, resolution, worktreePath);
+        
+        // Set up upstream tracking for the created branch
+        await this.setupUpstreamTracking(repoInfo, defaultBranch, worktreePath);
+        
+        this.services.logger.log(`Created worktree for default branch '${defaultBranch}' with upstream tracking`);
+      } finally {
+        // Restore original working directory
+        this.services.fs.chdir(originalCwd);
+      }
+    } catch (error) {
+      // Don't fail the entire init process if worktree creation fails
+      this.services.logger.warn(`Warning: Failed to create default branch worktree: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Sets up upstream tracking for a worktree branch
+   */
+  private async setupUpstreamTracking(repoInfo: RepositoryInfo, branchName: string, worktreePath: string): Promise<void> {
+    try {
+      // Set the upstream branch to track origin/branchName
+      await this.services.git.executeCommandInDir(worktreePath, ['branch', '--set-upstream-to', `origin/${branchName}`]);
+    } catch (error) {
+      this.services.logger.warn(`Warning: Failed to set upstream tracking for branch '${branchName}': ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

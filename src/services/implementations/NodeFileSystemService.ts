@@ -60,4 +60,8 @@ export class NodeFileSystemService implements FileSystemService {
       return false;
     }
   }
+  
+  chdir(path: string): void {
+    process.chdir(path);
+  }
 }
