@@ -492,6 +492,311 @@ branch refs/heads/feature`;
     });
   });
 
+  describe('Upstream Tracking', () => {
+    describe('checkAndSetUpstream', () => {
+      test('should skip when upstream tracking already exists', async () => {
+        const { services, mockLogger, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        // Mock git command to return existing upstream
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: 'refs/remotes/origin/feature-branch',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.checkAndSetUpstream(mockRepoInfo, 'feature-branch');
+
+        // Should log that upstream is already configured
+        expect(mockLogger.hasLogContaining('log', 'already has upstream tracking configured')).toBe(true);
+        
+        // Should only call for-each-ref to check upstream
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch']
+        });
+      });
+
+      test('should set upstream when branch exists on remote but no upstream configured', async () => {
+        const { services, mockLogger, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        // Mock sequence of git commands
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+          stdout: 'refs/remotes/origin/feature-branch',
+          stderr: '',
+          exitCode: 0
+        });
+        mockGit.setCommandResponse(['branch', '--set-upstream-to', 'origin/feature-branch', 'feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.checkAndSetUpstream(mockRepoInfo, 'feature-branch');
+
+        // Should log the upstream setup process
+        expect(mockLogger.hasLogContaining('log', "Set upstream tracking for branch 'feature-branch' to 'origin/feature-branch'")).toBe(true);
+        
+        // Should have called branch --set-upstream-to
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['branch', '--set-upstream-to', 'origin/feature-branch', 'feature-branch']
+        });
+      });
+
+      test('should skip when no matching remote branch exists', async () => {
+        const { services, mockLogger, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+          stdout: 'refs/remotes/origin/main\nrefs/remotes/origin/develop',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.checkAndSetUpstream(mockRepoInfo, 'feature-branch');
+
+        // Should log that no matching remote branch was found
+        expect(mockLogger.hasLogContaining('log', "No matching remote branch found for 'feature-branch', skipping upstream setup")).toBe(true);
+        
+        // Should not call branch --set-upstream-to
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).not.toContainEqual(expect.objectContaining({
+          args: expect.arrayContaining(['branch', '--set-upstream-to'])
+        }));
+      });
+
+      test('should handle git command failure gracefully', async () => {
+        const { services, mockLogger, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        // Mock successful upstream check (no tracking set)
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+
+        // Mock successful remote branch finding
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+          stdout: 'refs/remotes/origin/feature-branch',
+          stderr: '',
+          exitCode: 0
+        });
+
+        // Mock the set-upstream command failure 
+        mockGit.setCommandResponse(['branch', '--set-upstream-to', 'origin/feature-branch', 'feature-branch'], {
+          stdout: '',
+          stderr: 'Git command failed',
+          exitCode: 1
+        });
+
+        await worktreeOps.checkAndSetUpstream(mockRepoInfo, 'feature-branch');
+
+        // Should log warning but not throw
+        expect(mockLogger.hasLogContaining('warn', "Warning: Failed to set upstream for branch 'feature-branch': Git command failed")).toBe(true);
+      });
+
+      test('should handle multiple remotes and choose first match', async () => {
+        const { services, mockLogger, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+          stdout: 'refs/remotes/origin/feature-branch\nrefs/remotes/upstream/feature-branch\nrefs/remotes/origin/main',
+          stderr: '',
+          exitCode: 0
+        });
+        mockGit.setCommandResponse(['branch', '--set-upstream-to', 'origin/feature-branch', 'feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.checkAndSetUpstream(mockRepoInfo, 'feature-branch');
+
+        // Should set upstream to first matching remote (origin)
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['branch', '--set-upstream-to', 'origin/feature-branch', 'feature-branch']
+        });
+        expect(mockLogger.hasLogContaining('log', "'origin/feature-branch'")).toBe(true);
+      });
+    });
+
+    describe('createWorktree with upstream tracking', () => {
+      test('should call checkAndSetUpstream for local branch resolution', async () => {
+        const { services, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        const resolution = {
+          type: 'local' as const,
+          branchName: 'feature-branch',
+          isOutdated: false
+        };
+
+        // Mock successful worktree creation and upstream check
+        mockGit.setCommandResponse(['worktree', 'add', '/test/project/feature-branch', 'feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: 'refs/remotes/origin/feature-branch',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.createWorktree(mockRepoInfo, resolution, '/test/project/feature-branch');
+
+        // Should call git worktree add
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['worktree', 'add', '/test/project/feature-branch', 'feature-branch']
+        });
+        
+        // Should also call upstream checking commands
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch']
+        });
+      });
+
+      test('should not call checkAndSetUpstream for remote branch resolution', async () => {
+        const { services, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        const resolution = {
+          type: 'remote' as const,
+          branchName: 'feature-branch',
+          remoteName: 'origin',
+          needsTracking: true
+        };
+
+        // Mock successful worktree creation
+        mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature-branch', '/test/project/feature-branch', 'origin/feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.createWorktree(mockRepoInfo, resolution, '/test/project/feature-branch');
+
+        // Should call git worktree add with -b flag for remote branch
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['worktree', 'add', '-b', 'feature-branch', '/test/project/feature-branch', 'origin/feature-branch']
+        });
+        
+        // Should not call upstream checking commands (tracking set during creation)
+        expect(commands).not.toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch']
+        });
+      });
+
+      test('should not call checkAndSetUpstream for new branch resolution', async () => {
+        const { services, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        const resolution = {
+          type: 'new' as const,
+          branchName: 'new-feature'
+        };
+
+        // Mock successful worktree creation
+        mockGit.setCommandResponse(['worktree', 'add', '-b', 'new-feature', '/test/project/new-feature'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+
+        await worktreeOps.createWorktree(mockRepoInfo, resolution, '/test/project/new-feature');
+
+        // Should call git worktree add with -b flag for new branch
+        const commands = mockGit.getExecutedCommands();
+        expect(commands).toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['worktree', 'add', '-b', 'new-feature', '/test/project/new-feature']
+        });
+        
+        // Should not call upstream checking commands (no upstream for new branch)
+        expect(commands).not.toContainEqual({
+          gitDir: mockRepoInfo.gitDir,
+          args: ['for-each-ref', '--format=%(upstream)', 'refs/heads/new-feature']
+        });
+      });
+
+      test('should continue worktree creation even if upstream setup fails', async () => {
+        const { services, mockLogger, mockGit } = createTestServices();
+        const worktreeOps = new WorktreeOperations(services);
+
+        const resolution = {
+          type: 'local' as const,
+          branchName: 'feature-branch',
+          isOutdated: false
+        };
+
+        // Mock worktree creation success, but upstream setup failure
+        mockGit.setCommandResponse(['worktree', 'add', '/test/project/feature-branch', 'feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+        
+        // Mock successful upstream check (no upstream set)
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(upstream)', 'refs/heads/feature-branch'], {
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        });
+
+        // Mock successful remote branch finding
+        mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], {
+          stdout: 'refs/remotes/origin/feature-branch',
+          stderr: '',
+          exitCode: 0
+        });
+
+        // Mock the set-upstream command failure
+        mockGit.setCommandResponse(['branch', '--set-upstream-to', 'origin/feature-branch', 'feature-branch'], {
+          stdout: '',
+          stderr: 'Git command failed',
+          exitCode: 1
+        });
+
+        // Should not throw error
+        await expect(worktreeOps.createWorktree(mockRepoInfo, resolution, '/test/project/feature-branch')).resolves.toBeUndefined();
+
+        // Should log worktree creation success
+        expect(mockLogger.hasLogContaining('log', "Created worktree for existing local branch")).toBe(true);
+        
+        // Should log upstream setup warning
+        expect(mockLogger.hasLogContaining('warn', "Warning: Failed to set upstream for branch 'feature-branch': Git command failed")).toBe(true);
+      });
+    });
+  });
+
   describe('Confirmation Prompts', () => {
     // Note: For unit tests, we'll just test the basic logic
     // Integration tests will cover the full interactive behavior
