@@ -23,13 +23,13 @@ Use the official install script for automatic platform detection and installatio
 
 ```bash
 # Quick install (latest version)
-curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | bash
 
 # Install specific version
-WT_INSTALL_VERSION=v0.2.1 curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | sh
+WT_INSTALL_VERSION=v0.2.1 curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | bash
 
 # Install to custom path (default: ~/.local/bin)
-WT_INSTALL_PATH=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | sh
+WT_INSTALL_PATH=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/tinmancoding/wt/main/install.sh | bash
 
 # Verify installation
 wt --help
