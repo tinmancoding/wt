@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
-import { mkdir, writeFile, readdir, rename, rmdir } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import { createTestEnvironment, initializeGitRepo, type TestEnvironment } from './test-utils.ts';
@@ -53,36 +53,7 @@ async function runGit(args: string[], cwd: string): Promise<void> {
   }
 }
 
-// Helper to setup a complete remote repository with initial content
-async function setupRemoteRepository(remoteDir: string): Promise<string> {
-  // Initialize the remote repository as a normal repo first
-  await runGit(['init'], remoteDir);
-  await runGit(['config', 'user.email', 'test@example.com'], remoteDir);
-  await runGit(['config', 'user.name', 'Test User'], remoteDir);
-  
-  // Create initial content and commit
-  await writeFile(join(remoteDir, 'README.md'), 'Remote repository');
-  await runGit(['add', '.'], remoteDir);
-  await runGit(['commit', '-m', 'Initial commit'], remoteDir);
-  
-  // Get the current branch name
-  const { stdout: branchName } = await runGitWithOutput(['branch', '--show-current'], remoteDir);
-  
-  // Convert to bare repository
-  await runGit(['config', '--bool', 'core.bare', 'true'], remoteDir);
-  const gitDir = join(remoteDir, '.git');
-  const tempGitDir = join(remoteDir, '.git-temp');
-  
-  // Move .git contents to root and clean up
-  await rename(gitDir, tempGitDir);
-  const files = await readdir(tempGitDir);
-  for (const file of files) {
-    await rename(join(tempGitDir, file), join(remoteDir, file));
-  }
-  await rmdir(tempGitDir);
-  
-  return branchName || 'master';
-}
+
 
 // Helper function to run wt command
 async function runWT(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
