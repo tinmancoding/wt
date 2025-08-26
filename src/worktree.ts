@@ -195,7 +195,8 @@ export class WorktreeOperations {
   async createWorktree(
     repoInfo: RepositoryInfo,
     resolution: BranchResolution,
-    worktreePath: string
+    worktreePath: string,
+    commitIsh?: string
   ): Promise<void> {
     const { type, branchName, remoteName } = resolution;
 
@@ -206,23 +207,46 @@ export class WorktreeOperations {
           if (resolution.isOutdated) {
             this.services.logger.warn(`Warning: Local branch '${branchName}' may be outdated. Consider fetching latest changes.`);
           }
-          await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', worktreePath, branchName]);
-          this.services.logger.log(`Created worktree for existing local branch '${branchName}' at ${worktreePath}`);
+          
+          if (commitIsh) {
+            // Use specified commit-ish instead of branch name
+            await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', worktreePath, commitIsh]);
+            this.services.logger.log(`Created worktree for commit-ish '${commitIsh}' at ${worktreePath}`);
+          } else {
+            // Use existing local branch
+            await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', worktreePath, branchName]);
+            this.services.logger.log(`Created worktree for existing local branch '${branchName}' at ${worktreePath}`);
+          }
           break;
         }
 
         case 'remote': {
           // Create worktree from remote branch with tracking
           const remoteBranchRef = `${remoteName}/${branchName}`;
-          await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', '-b', branchName, worktreePath, remoteBranchRef]);
-          this.services.logger.log(`Created worktree for remote branch '${remoteBranchRef}' with local tracking branch '${branchName}' at ${worktreePath}`);
+          
+          if (commitIsh) {
+            // Use specified commit-ish instead of remote branch
+            await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', '-b', branchName, worktreePath, commitIsh]);
+            this.services.logger.log(`Created worktree for commit-ish '${commitIsh}' with local tracking branch '${branchName}' at ${worktreePath}`);
+          } else {
+            // Use remote branch
+            await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', '-b', branchName, worktreePath, remoteBranchRef]);
+            this.services.logger.log(`Created worktree for remote branch '${remoteBranchRef}' with local tracking branch '${branchName}' at ${worktreePath}`);
+          }
           break;
         }
 
         case 'new': {
-          // Create worktree with new branch from current HEAD
-          await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', '-b', branchName, worktreePath]);
-          this.services.logger.log(`Created worktree with new branch '${branchName}' at ${worktreePath}`);
+          // Create worktree with new branch
+          if (commitIsh) {
+            // Create new branch from specified commit-ish
+            await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', '-b', branchName, worktreePath, commitIsh]);
+            this.services.logger.log(`Created worktree with new branch '${branchName}' from commit-ish '${commitIsh}' at ${worktreePath}`);
+          } else {
+            // Create new branch from current HEAD
+            await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', '-b', branchName, worktreePath]);
+            this.services.logger.log(`Created worktree with new branch '${branchName}' at ${worktreePath}`);
+          }
           break;
         }
 
@@ -237,7 +261,8 @@ export class WorktreeOperations {
   async createWorktreeWithBranch(
     repoInfo: RepositoryInfo,
     config: WTConfig,
-    branchName: string
+    branchName: string,
+    commitIsh?: string
   ): Promise<void> {
     // Resolve branch information
     const resolution = await this.resolveBranch(repoInfo, branchName, config);
@@ -247,7 +272,7 @@ export class WorktreeOperations {
     const worktreePath = join(worktreeBasePath, branchName);
 
     // Create the worktree
-    await this.createWorktree(repoInfo, resolution, worktreePath);
+    await this.createWorktree(repoInfo, resolution, worktreePath, commitIsh);
   }
 
   async removeWorktree(repoInfo: RepositoryInfo, worktreePath: string): Promise<void> {
@@ -271,7 +296,8 @@ export class WorktreeOperations {
     config: WTConfig,
     branchName: string,
     command: string,
-    args: string[]
+    args: string[],
+    commitIsh?: string
   ): Promise<CommandResult> {
     // First, check if worktree already exists
     const worktrees = await this.listWorktrees(repoInfo);
@@ -285,7 +311,7 @@ export class WorktreeOperations {
     } else {
       // Create the worktree
       this.services.logger.log(`Creating worktree for branch '${branchName}'...`);
-      await this.createWorktreeWithBranch(repoInfo, config, branchName);
+      await this.createWorktreeWithBranch(repoInfo, config, branchName, commitIsh);
       
       // Get the newly created worktree path
       const worktreeBasePath = resolve(repoInfo.rootDir, config.worktreeDir);
@@ -468,11 +494,12 @@ export async function resolveBranch(repoInfo: RepositoryInfo, branchName: string
 export async function createWorktree(
   repoInfo: RepositoryInfo,
   resolution: BranchResolution,
-  worktreePath: string
+  worktreePath: string,
+  commitIsh?: string
 ): Promise<void> {
   const defaultServices = createServiceContainer();
   const worktreeOps = new WorktreeOperations(defaultServices);
-  return worktreeOps.createWorktree(repoInfo, resolution, worktreePath);
+  return worktreeOps.createWorktree(repoInfo, resolution, worktreePath, commitIsh);
 }
 
 /**
@@ -481,11 +508,12 @@ export async function createWorktree(
 export async function createWorktreeWithBranch(
   repoInfo: RepositoryInfo,
   config: WTConfig,
-  branchName: string
+  branchName: string,
+  commitIsh?: string
 ): Promise<void> {
   const defaultServices = createServiceContainer();
   const worktreeOps = new WorktreeOperations(defaultServices);
-  return worktreeOps.createWorktreeWithBranch(repoInfo, config, branchName);
+  return worktreeOps.createWorktreeWithBranch(repoInfo, config, branchName, commitIsh);
 }
 
 /**
@@ -562,9 +590,10 @@ export async function runCommandInWorktree(
   config: WTConfig,
   branchName: string,
   command: string,
-  args: string[]
+  args: string[],
+  commitIsh?: string
 ): Promise<CommandResult> {
   const defaultServices = createServiceContainer();
   const worktreeOps = new WorktreeOperations(defaultServices);
-  return worktreeOps.runCommandInWorktree(repoInfo, config, branchName, command, args);
+  return worktreeOps.runCommandInWorktree(repoInfo, config, branchName, command, args, commitIsh);
 }
