@@ -156,6 +156,44 @@ export class WorktreeOperations {
     }
   }
 
+  async checkAndSetUpstream(repoInfo: RepositoryInfo, branchName: string): Promise<void> {
+    try {
+      // Check if the local branch has an upstream tracking branch
+      // Use the main git directory but check the branch state
+      const trackingResult = await this.services.git.executeCommandWithResult(repoInfo.gitDir, [
+        'for-each-ref', 
+        '--format=%(upstream)', 
+        `refs/heads/${branchName}`
+      ]);
+      
+      if (trackingResult.exitCode === 0 && trackingResult.stdout.trim()) {
+        // Upstream is already set
+        this.services.logger.log(`Branch '${branchName}' already has upstream tracking configured`);
+        return;
+      }
+
+      // No upstream set, try to find a matching remote branch
+      const remoteInfo = await this.findRemoteBranch(repoInfo, branchName);
+      
+      if (remoteInfo.exists && remoteInfo.remoteName) {
+        // Set up tracking to the remote branch using the main git directory
+        const remoteBranchRef = `${remoteInfo.remoteName}/${branchName}`;
+        await this.services.git.executeCommand(repoInfo.gitDir, [
+          'branch', 
+          '--set-upstream-to', 
+          remoteBranchRef, 
+          branchName
+        ]);
+        this.services.logger.log(`Set upstream tracking for branch '${branchName}' to '${remoteBranchRef}'`);
+      } else {
+        this.services.logger.log(`No matching remote branch found for '${branchName}', skipping upstream setup`);
+      }
+    } catch (error) {
+      // Upstream setup failures are not fatal, just warn
+      this.services.logger.warn(`Warning: Failed to set upstream for branch '${branchName}': ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   async resolveBranch(repoInfo: RepositoryInfo, branchName: string, config: WTConfig): Promise<BranchResolution> {
     // First, perform auto-fetch if enabled
     await this.performAutoFetch(repoInfo, config);
@@ -217,6 +255,9 @@ export class WorktreeOperations {
             await this.services.git.executeCommand(repoInfo.gitDir, ['worktree', 'add', worktreePath, branchName]);
             this.services.logger.log(`Created worktree for existing local branch '${branchName}' at ${worktreePath}`);
           }
+          
+          // Check and set upstream tracking if needed after worktree creation
+          await this.checkAndSetUpstream(repoInfo, branchName);
           break;
         }
 
