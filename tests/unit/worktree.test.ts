@@ -804,4 +804,178 @@ branch refs/heads/feature`;
       expect(typeof promptConfirmation).toBe('function');
     });
   });
+
+  describe('Commit-ish Support', () => {
+    test('createWorktreeWithBranch should create worktree with commit-ish for local branch', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch exists
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 0 });
+      
+      // Mock worktree creation with commit-ish
+      mockGit.setCommandResponse(['worktree', 'add', '/test/project/feature', 'abc123'], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature', 'abc123');
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '/test/project/feature', 'abc123']
+      });
+      expect(mockLogger.hasLog('log', 'Created worktree for commit-ish \'abc123\' at /test/project/feature')).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should create worktree with commit-ish for remote branch', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch doesn't exist
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 1 });
+      
+      // Mock remote branch exists
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], 'refs/remotes/origin/feature\n');
+      
+      // Mock worktree creation with commit-ish
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature', '/test/project/feature', 'def456'], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature', 'def456');
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '-b', 'feature', '/test/project/feature', 'def456']
+      });
+      expect(mockLogger.hasLog('log', 'Created worktree for commit-ish \'def456\' with local tracking branch \'feature\' at /test/project/feature')).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should create worktree with commit-ish for new branch', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch doesn't exist
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 1 });
+      
+      // Mock remote branch doesn't exist
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], '');
+      
+      // Mock worktree creation with commit-ish
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature', '/test/project/feature', 'ghi789'], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature', 'ghi789');
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '-b', 'feature', '/test/project/feature', 'ghi789']
+      });
+      expect(mockLogger.hasLog('log', 'Created worktree with new branch \'feature\' from commit-ish \'ghi789\' at /test/project/feature')).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should create worktree without commit-ish for local branch (default behavior)', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch exists
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 0 });
+      
+      // Mock worktree creation without commit-ish (uses branch name)
+      mockGit.setCommandResponse(['worktree', 'add', '/test/project/feature', 'feature'], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature');
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '/test/project/feature', 'feature']
+      });
+      expect(mockLogger.hasLog('log', 'Created worktree for existing local branch \'feature\' at /test/project/feature')).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should create worktree without commit-ish for remote branch (default behavior)', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch doesn't exist
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 1 });
+      
+      // Mock remote branch exists
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], 'refs/remotes/origin/feature\n');
+      
+      // Mock worktree creation without commit-ish (uses remote branch)
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature', '/test/project/feature', 'origin/feature'], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature');
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '-b', 'feature', '/test/project/feature', 'origin/feature']
+      });
+      expect(mockLogger.hasLog('log', 'Created worktree for remote branch \'origin/feature\' with local tracking branch \'feature\' at /test/project/feature')).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should create worktree without commit-ish for new branch (default behavior)', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch doesn't exist
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 1 });
+      
+      // Mock remote branch doesn't exist
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], '');
+      
+      // Mock worktree creation without commit-ish (uses current HEAD)
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature', '/test/project/feature'], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature');
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '-b', 'feature', '/test/project/feature']
+      });
+      expect(mockLogger.hasLog('log', 'Created worktree with new branch \'feature\' at /test/project/feature')).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should handle commit-ish with special characters', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch doesn't exist
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 1 });
+      
+      // Mock remote branch doesn't exist
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], '');
+      
+      // Mock worktree creation with special commit-ish (tag with slash)
+      const specialCommitIsh = 'v1.0.0/stable';
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature', '/test/project/feature', specialCommitIsh], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature', specialCommitIsh);
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '-b', 'feature', '/test/project/feature', specialCommitIsh]
+      });
+      expect(mockLogger.hasLog('log', `Created worktree with new branch 'feature' from commit-ish '${specialCommitIsh}' at /test/project/feature`)).toBe(true);
+    });
+
+    test('createWorktreeWithBranch should handle commit-ish with hash', async () => {
+      const { services, mockLogger, mockGit } = createTestServices();
+      const worktreeOps = new WorktreeOperations(services);
+
+      // Mock local branch doesn't exist
+      mockGit.setCommandResponse(['show-ref', '--verify', '--quiet', 'refs/heads/feature'], { stdout: '', stderr: '', exitCode: 1 });
+      
+      // Mock remote branch doesn't exist
+      mockGit.setCommandResponse(['for-each-ref', '--format=%(refname)', 'refs/remotes'], '');
+      
+      // Mock worktree creation with commit hash
+      const commitHash = 'a1b2c3d4e5f6789012345678901234567890abcd';
+      mockGit.setCommandResponse(['worktree', 'add', '-b', 'feature', '/test/project/feature', commitHash], { stdout: '', stderr: '', exitCode: 0 });
+
+      await worktreeOps.createWorktreeWithBranch(mockRepoInfo, mockConfig, 'feature', commitHash);
+
+      expect(mockGit.getExecutedCommands()).toContainEqual({
+        gitDir: '/test/project/.bare',
+        args: ['worktree', 'add', '-b', 'feature', '/test/project/feature', commitHash]
+      });
+      expect(mockLogger.hasLog('log', `Created worktree with new branch 'feature' from commit-ish '${commitHash}' at /test/project/feature`)).toBe(true);
+    });
+  });
 });

@@ -68,11 +68,18 @@ export function createCreateCommand(services: ServiceContainer): Command {
         name: 'branch',
         description: 'Branch name to create worktree for',
         required: true
+      },
+      {
+        name: 'commit-ish',
+        description: 'Optional commit, branch, or tag to checkout in the worktree (defaults to current HEAD)',
+        required: false
       }
     ],
     handler: async ({ positional }) => {
       try {
         const branch = positional[0];
+        const commitIsh = positional[1]; // Optional commit-ish argument
+        
         if (!branch) {
           services.logger.error('Error: Branch name is required');
           process.exit(EXIT_CODES.INVALID_ARGUMENTS);
@@ -82,7 +89,7 @@ export function createCreateCommand(services: ServiceContainer): Command {
         const config = await loadConfig(repoInfo);
         
         const worktreeOps = new WorktreeOperations(services);
-        await worktreeOps.createWorktreeWithBranch(repoInfo, config, branch);
+        await worktreeOps.createWorktreeWithBranch(repoInfo, config, branch, commitIsh);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error occurred';
         services.logger.error(`Error creating worktree: ${message}`);
